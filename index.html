@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Value Bet Pro — ROI multi-marchés vérifié</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1f262f;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #f78166;
+    --accent-2: #a371f7;
+    --green: #3fb950;
+    --green-bg: rgba(63, 185, 80, 0.12);
+    --red: #f85149;
+    --red-bg: rgba(248, 81, 73, 0.12);
+    --orange: #d29922;
+    --blue: #58a6ff;
+    --gold: #f0c33c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 16px;
+  }
+  .container { max-width: 1600px; margin: 0 auto; }
+  header { border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 20px; }
+  h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: 0.5px; }
+  h1 .pro { color: var(--accent-2); font-weight: 700; }
+  .subtitle { color: var(--muted); font-size: 13px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .badge {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+  .badge.live { color: var(--green); border-color: var(--green); }
+  .badge.gold { color: var(--gold); border-color: var(--gold); }
+  .badge.purple { color: var(--accent-2); border-color: var(--accent-2); }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .controls select, .controls input {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  .toggle-group { display: flex; gap: 4px; }
+  .toggle-btn {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .toggle-btn.active { color: var(--accent); border-color: var(--accent); background: rgba(247, 129, 102, 0.1); }
+  .toggle-btn:hover { color: var(--text); }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .panel h2 {
+    margin: 0 0 12px;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+  }
+  .stat.highlight { border-color: var(--accent-2); background: rgba(163, 113, 247, 0.08); }
+  .stat-value { font-size: 20px; font-weight: 700; }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+  .table-wrapper { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th {
+    background: var(--panel-2);
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    user-select: none;
+    position: sticky;
+    top: 0;
+  }
+  th.sortable:hover { color: var(--accent); }
+  th.market-header {
+    border-left: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--accent-2);
+    font-weight: 700;
+  }
+  th.market-header.best { color: var(--gold); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.market-cell { border-left: 1px solid var(--border); }
+  tr:hover { background: var(--panel-2); }
+  tr.elite td { background: rgba(240, 195, 60, 0.04); }
+  tr.elite td:first-child { border-left: 3px solid var(--gold); }
+  .roi-pos { color: var(--green); }
+  .roi-neg { color: var(--red); }
+  .roi-strong { color: var(--green); background: var(--green-bg); padding: 1px 5px; border-radius: 3px; font-weight: 700; }
+  .roi-zero { color: var(--muted); }
+
+  .league-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .league-tag.D1 { color: var(--accent); border-color: var(--accent); }
+  .league-tag.D2 { color: var(--blue); border-color: var(--blue); }
+
+  .loading {
+    text-align: center;
+    padding: 60px;
+    color: var(--muted);
+  }
+  .loading-bar {
+    height: 3px;
+    background: var(--panel-2);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 16px auto;
+    max-width: 300px;
+  }
+  .loading-bar::after {
+    content: '';
+    display: block;
+    height: 100%;
+    background: var(--accent-2);
+    animation: load 1.4s ease-in-out infinite;
+  }
+  @keyframes load { 0%,100% { width: 0; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } }
+
+  .footer {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .footer a { color: var(--blue); text-decoration: none; }
+
+  .market-section {
+    background: var(--panel-2);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border-left: 3px solid var(--accent-2);
+    margin: 16px 0;
+  }
+  .market-section h3 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent-2); }
+  .market-section p { margin: 0; font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Value Bet <span class="pro">PRO</span> — ROI multi-marchés vérifié</h1>
+    <div class="subtitle">
+      Comparaison simultanée de 6 marchés sur 7 saisons (2020-21 → 2026-27) — mise plate 1 €/match
+    </div>
+    <div class="badges">
+      <span class="badge purple">★ MULTI-MARCHÉS</span>
+      <span class="badge gold">Élite</span>
+      <span class="badge">15 ligues D1+D2</span>
+      <span class="badge">Cotes vérifiées match par match</span>
+      <span class="badge live" id="last-update">Chargement…</span>
+    </div>
+  </header>
+
+  <div class="market-section">
+    <h3>💡 Marché phare détecté : « Victoire + Over 2.5 »</h3>
+    <p>ROI portfolio Élite : <strong>+29.94 %</strong> sur 1 038 paris (vs +16.43 % pour le « 1 sec »). Cote moyenne ~3.00 — bankroll min recommandée : 80-100 unités.</p>
+  </div>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="controls">
+    <div class="toggle-group">
+      <button class="toggle-btn active" data-filter="elite">Élite uniquement</button>
+      <button class="toggle-btn" data-filter="tier1">Tier 1</button>
+      <button class="toggle-btn" data-filter="all">Toutes (n≥60)</button>
+    </div>
+    <select id="leagueFilter">
+      <option value="">Toutes ligues</option>
+    </select>
+    <select id="tierFilter">
+      <option value="">D1 + D2</option>
+      <option value="D1">D1 uniquement</option>
+      <option value="D2">D2 uniquement</option>
+    </select>
+    <select id="sortBy">
+      <option value="win">Tri : ROI 1 sec</option>
+      <option value="win_over25">Tri : ROI V+Over 2.5</option>
+      <option value="over25">Tri : ROI Over 2.5</option>
+      <option value="under25">Tri : ROI Under 2.5</option>
+      <option value="dc1x">Tri : ROI DC 1X</option>
+      <option value="ah_minus1">Tri : ROI AH -1</option>
+    </select>
+    <input type="text" id="searchTeam" placeholder="🔍 Recherche équipe..." style="flex: 1; min-width: 200px;">
+  </div>
+
+  <div class="panel">
+    <h2>Classement multi-marchés</h2>
+    <div id="content">
+      <div class="loading">
+        Téléchargement des CSVs (15 ligues × 7 saisons)…
+        <div class="loading-bar"></div>
+        Calcul des ROI sur 6 marchés en parallèle…
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>
+      <strong>Marchés calculés :</strong> 1 sec (1N2 home win) · Over/Under 2.5 buts · Double Chance 1X · Victoire + Over 2.5 (combiné) · AH -1 (favori dom doit gagner par 2+).
+    </p>
+    <p>
+      <strong>Méthodologie :</strong> mise plate 1 €/match domicile, à la cote moyenne marché (Avg* football-data.co.uk). Cote DC 1X synthétisée via 1/(1/H+1/D). AH -1 inclut uniquement les matchs où la ligne handicap = -1.
+    </p>
+    <p>
+      Sources : <a href="https://www.football-data.co.uk" target="_blank">football-data.co.uk</a> ·
+      <a href="https://fixturedownload.com" target="_blank">fixturedownload.com</a> ·
+      Mise à jour automatique toutes les 6 heures.
+    </p>
+  </div>
+</div>
+
+<script>
+let DATA = null;
+let CURRENT_FILTER = 'elite';
+let CURRENT_LEAGUE = '';
+let CURRENT_TIER = '';
+let CURRENT_SEARCH = '';
+let SORT_BY = 'win';
+let SORT_DIR = -1;
+
+function fmtRoi(v) {
+  if (v === null || v === undefined) return '<span class="roi-zero">—</span>';
+  const cls = v > 10 ? 'roi-strong' : (v >= 0 ? 'roi-pos' : 'roi-neg');
+  return `<span class="${cls}">${v >= 0 ? '+' : ''}${v.toFixed(1)}%</span>`;
+}
+
+function fmtN(n) {
+  if (n === 0 || n === null || n === undefined) return '<span class="roi-zero">0</span>';
+  return n.toString();
+}
+
+function applyFilters(teams) {
+  return teams.filter(t => {
+    if (CURRENT_FILTER === 'elite' && !t.isElite) return false;
+    if (CURRENT_FILTER === 'tier1' && !t.isTier1) return false;
+    if (CURRENT_LEAGUE && t.league !== CURRENT_LEAGUE) return false;
+    if (CURRENT_TIER && t.tier !== CURRENT_TIER) return false;
+    if (CURRENT_SEARCH) {
+      const s = CURRENT_SEARCH.toLowerCase();
+      if (!t.team.toLowerCase().includes(s) && !t.leagueName.toLowerCase().includes(s)) return false;
+    }
+    return true;
+  });
+}
+
+function sortTeams(teams) {
+  return [...teams].sort((a, b) => {
+    const av = a.markets[SORT_BY]?.roi_5y;
+    const bv = b.markets[SORT_BY]?.roi_5y;
+    if (av === null && bv === null) return 0;
+    if (av === null || av === undefined) return 1;
+    if (bv === null || bv === undefined) return -1;
+    return (av - bv) * SORT_DIR;
+  });
+}
+
+function findBestMarket(t) {
+  // Marche au plus haut ROI 5y pour cette equipe (parmi ceux avec n>=20)
+  let best = null; let bestRoi = -Infinity;
+  for (const [k, m] of Object.entries(t.markets)) {
+    if (m.n_5y < 20) continue;
+    if ((m.roi_5y || 0) > bestRoi) { bestRoi = m.roi_5y; best = k; }
+  }
+  return best;
+}
+
+function render() {
+  const filtered = applyFilters(DATA.teams);
+  const sorted = sortTeams(filtered);
+
+  // Summary : ROI portfolio par marche (Elite seulement)
+  const elite = DATA.teams.filter(t => t.isElite);
+  const summaryHtml = ['win','win_over25','over25','dc1x','ah_minus1','under25'].map(mkey => {
+    const totN = elite.reduce((s,t) => s + (t.markets[mkey]?.n_total || 0), 0);
+    const totProfit = elite.reduce((s,t) => s + (t.markets[mkey]?.profit_total || 0), 0);
+    const roi = totN > 0 ? (totProfit/totN*100) : 0;
+    const label = elite[0]?.markets[mkey]?.label || mkey;
+    const isHigh = roi >= 20;
+    return `
+      <div class="stat${isHigh ? ' highlight' : ''}">
+        <div class="stat-value ${roi >= 0 ? (roi >= 10 ? 'roi-strong' : 'roi-pos') : 'roi-neg'}" style="display:inline-block">
+          ${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%
+        </div>
+        <div class="stat-label">${label}<br>(${totN} paris · ${totProfit >= 0 ? '+' : ''}${totProfit.toFixed(0)}€)</div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('summary').innerHTML = summaryHtml;
+
+  // Tableau
+  const html = `
+    <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th class="sortable">Équipe</th>
+          <th>Lig.</th>
+          <th class="num market-header">1 sec ROI 5y</th>
+          <th class="num market-header best">V+O2.5 ROI 5y</th>
+          <th class="num market-header">O 2.5 ROI 5y</th>
+          <th class="num market-header">U 2.5 ROI 5y</th>
+          <th class="num market-header">DC 1X ROI 5y</th>
+          <th class="num market-header">AH -1 ROI 5y</th>
+          <th class="num market-header">⭐ Best</th>
+          <th>Saisons V+O2.5</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sorted.map((t, i) => {
+          const best = findBestMarket(t);
+          const bestM = best ? t.markets[best] : null;
+          // detail saisons V+O2.5 (juste les 5 backtest)
+          const seasonsCell = ['2021','2122','2223','2324','2425'].map(s => {
+            const d = t.markets.win_over25?.perSeason?.[s];
+            const lbl = {'2021':'20-21','2122':'21-22','2223':'22-23','2324':'23-24','2425':'24-25'}[s];
+            if (!d) return `<span style="opacity:0.3;font-size:9px">${lbl}: —</span>`;
+            const cls = d.roi >= 0 ? 'roi-pos' : 'roi-neg';
+            return `<span class="${cls}" style="font-size:9px">${lbl}: ${d.roi >= 0 ? '+' : ''}${d.roi.toFixed(0)}%</span>`;
+          }).join(' ');
+          return `
+            <tr class="${t.isElite ? 'elite' : ''}">
+              <td>${i+1}</td>
+              <td><strong>${t.team}</strong>${t.isElite ? ' ★' : ''}</td>
+              <td><span class="league-tag ${t.tier}">${t.league}</span></td>
+              <td class="num market-cell">${fmtRoi(t.markets.win?.roi_5y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.win?.n_5y || 0}</span></td>
+              <td class="num market-cell" style="background:rgba(240,195,60,0.06)">${fmtRoi(t.markets.win_over25?.roi_5y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.win_over25?.n_5y || 0}</span></td>
+              <td class="num market-cell">${fmtRoi(t.markets.over25?.roi_5y)}</td>
+              <td class="num market-cell">${fmtRoi(t.markets.under25?.roi_5y)}</td>
+              <td class="num market-cell">${fmtRoi(t.markets.dc1x?.roi_5y)}</td>
+              <td class="num market-cell">${fmtRoi(t.markets.ah_minus1?.roi_5y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.ah_minus1?.n_5y || 0}</span></td>
+              <td class="num market-cell">${best ? `<strong>${bestM.label}</strong><br>${fmtRoi(bestM.roi_5y)}` : '<span class="roi-zero">—</span>'}</td>
+              <td>${seasonsCell}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+    ${sorted.length === 0 ? '<p style="text-align:center;color:var(--muted);padding:40px">Aucune équipe ne correspond aux filtres.</p>' : ''}
+  `;
+  document.getElementById('content').innerHTML = html;
+}
+
+async function loadData() {
+  try {
+    const r = await fetch('/api/team-rankings');
+    if (!r.ok) throw new Error('API team-rankings KO');
+    DATA = await r.json();
+
+    const leagues = [...new Set(DATA.teams.map(t => t.league))]
+      .map(c => DATA.teams.find(t => t.league === c))
+      .map(t => ({ code: t.league, name: t.leagueName }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const sel = document.getElementById('leagueFilter');
+    leagues.forEach(l => {
+      const opt = document.createElement('option');
+      opt.value = l.code; opt.textContent = l.name;
+      sel.appendChild(opt);
+    });
+
+    const d = new Date(DATA.lastUpdate);
+    document.getElementById('last-update').textContent = `MAJ ${d.toLocaleString('fr-FR', {dateStyle:'short',timeStyle:'short'})}`;
+    render();
+  } catch (e) {
+    document.getElementById('content').innerHTML =
+      `<p style="color:var(--red);text-align:center;padding:40px">Erreur de chargement : ${e.message}</p>`;
+  }
+}
+
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    CURRENT_FILTER = btn.dataset.filter;
+    render();
+  });
+});
+document.getElementById('leagueFilter').addEventListener('change', e => { CURRENT_LEAGUE = e.target.value; render(); });
+document.getElementById('tierFilter').addEventListener('change', e => { CURRENT_TIER = e.target.value; render(); });
+document.getElementById('searchTeam').addEventListener('input', e => { CURRENT_SEARCH = e.target.value; render(); });
+document.getElementById('sortBy').addEventListener('change', e => { SORT_BY = e.target.value; render(); });
+
+loadData();
+</script>
+</body>
+</html>

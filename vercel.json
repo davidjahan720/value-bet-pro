@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/team-rankings.js": {
+      "maxDuration": 60
+    },
+    "api/upcoming-fixtures.js": {
+      "maxDuration": 15
+    },
+    "api/historical-odds.js": {
+      "maxDuration": 10
+    }
+  }
+}
