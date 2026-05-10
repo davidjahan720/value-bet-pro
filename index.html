@@ -215,6 +215,7 @@
       <span class="badge">15 ligues D1+D2</span>
       <span class="badge">Cotes vérifiées match par match</span>
       <span class="badge live" id="last-update">Chargement…</span>
+      <span class="badge purple" id="quota-badge">Odds API : —</span>
     </div>
   </header>
 
@@ -226,6 +227,11 @@
   <div class="market-section" style="border-left-color: var(--gold)">
     <h3 style="color: var(--gold)">🧭 Recommandation hybride (mode actif)</h3>
     <p>Si la cote du prochain match est disponible, on détermine le <strong>bucket</strong> (Très favori / Favori normal / Pick'em / Outsider) et on prend le marché qui a le meilleur ROI <em>conditionné à ce type de match</em> (n≥30 dans le bucket). Sinon, fallback sur la reco globale (best ROI 5y, n≥20).</p>
+  </div>
+
+  <div class="market-section" style="border-left-color: var(--green)">
+    <h3 style="color: var(--green)">🔴 LIVE ODDS — Top 4 équipes</h3>
+    <p>Les <strong>4 premières équipes</strong> du classement sont enrichies avec des cotes <strong>live multi-bookmakers</strong> via The Odds API (cote moyenne EU + meilleure cote du marché pour line shopping). Limité au top 4 pour préserver le quota free 500 req/mois (~360 req/mois consommées).</p>
   </div>
 
   <div class="summary" id="summary"></div>
@@ -388,12 +394,27 @@ function getNextMatchOdds(t) {
 }
 
 function fmtNextMatch(t) {
-  // Priorite : fixturedownload (precis), fallback : nextMatches du CSV football-data
+  // 1) Live odds (The Odds API) - le plus precis
+  if (t.nextHomeFixture && t.nextHomeFixture.source === "odds-api-live") {
+    const f = t.nextHomeFixture;
+    const d = new Date(f.date);
+    const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' });
+    const cote = f.odds ? `<span style="color:var(--green);font-weight:600">${f.odds.toFixed(2)}</span>` : '—';
+    const best = f.bestOdds && f.bestOdds > (f.odds || 0) ? ` <span style="color:var(--gold);font-size:9px" title="Meilleure cote du marche (line shopping)">↑${f.bestOdds.toFixed(2)}</span>` : '';
+    return `
+      <div style="font-weight:600;color:var(--text)">${dateStr} <span style="font-size:9px;background:var(--green-bg);color:var(--green);padding:1px 4px;border-radius:3px;font-weight:700">LIVE</span></div>
+      <div style="font-size:10px;color:var(--muted)">vs ${f.opponent}</div>
+      <div style="font-size:10px;margin-top:2px">cote 1 : ${cote}${best}</div>
+      <div style="font-size:9px;color:var(--muted)">${f.bookmakers || 0} bookmakers</div>
+    `;
+  }
+  // 2) fixturedownload (date + adversaire mais pas de cote)
   if (t.nextHomeFixture) {
     const d = new Date(t.nextHomeFixture.date);
     const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' });
     return `<div style="font-weight:600;color:var(--text)">${dateStr}</div><div style="font-size:10px;color:var(--muted)">vs ${t.nextHomeFixture.opponent}</div>`;
   }
+  // 3) fallback CSV football-data (rare)
   if (t.nextMatches && t.nextMatches.length > 0) {
     const next = t.nextMatches[0];
     return `<div style="font-weight:600;color:var(--text)">${next.date}</div><div style="font-size:10px;color:var(--muted)">vs ${next.opponent}</div>`;
@@ -529,9 +550,42 @@ function render() {
   document.getElementById('content').innerHTML = html;
 }
 
+async function loadLiveOdds(top4Teams) {
+  // Appel a /api/live-odds (The Odds API) — limite au TOP 4 pour economiser
+  // le quota free 500 req/mois.
+  if (top4Teams.length === 0) return;
+  const param = top4Teams.map(t => `${t.team}|${t.league}`).join(',');
+  try {
+    const r = await fetch(`/api/live-odds?teams=${encodeURIComponent(param)}`);
+    if (!r.ok) {
+      console.warn("Live odds KO:", r.status);
+      return;
+    }
+    const j = await r.json();
+    const map = new Map();
+    for (const f of j.fixtures || []) {
+      if (f.nextHome) map.set(`${f.team}|${f.league}`, f.nextHome);
+    }
+    for (const t of DATA.teams) {
+      const k = `${t.team}|${t.league}`;
+      if (map.has(k)) {
+        t.nextHomeFixture = map.get(k);
+        t.hasLiveOdds = true;
+      }
+    }
+    if (j.quotaRemaining !== null && j.quotaRemaining !== undefined) {
+      const badge = document.getElementById('quota-badge');
+      if (badge) badge.textContent = `Odds API : ${j.quotaRemaining} req restantes`;
+    }
+    render();
+  } catch (e) {
+    console.warn("Live odds error:", e);
+  }
+}
+
 async function loadFixtures(targetTeams) {
-  // Charge les prochains matchs domicile via /api/upcoming-fixtures (fixturedownload.com)
-  // pour les equipes Tier1/Elite uniquement (limiter la charge)
+  // Fallback fixtures via fixturedownload.com pour les equipes hors TOP 4
+  // (ne fournit pas les cotes mais donne au moins la date + adversaire)
   if (targetTeams.length === 0) return;
   const param = targetTeams.map(t => `${t.team}|${t.league}`).join(',');
   try {
@@ -544,7 +598,8 @@ async function loadFixtures(targetTeams) {
     }
     for (const t of DATA.teams) {
       const k = `${t.team}|${t.league}`;
-      if (map.has(k)) t.nextHomeFixture = map.get(k);
+      // ne pas ecraser si on a deja les live odds
+      if (map.has(k) && !t.hasLiveOdds) t.nextHomeFixture = map.get(k);
     }
     render();
   } catch (e) {
@@ -573,9 +628,14 @@ async function loadData() {
     document.getElementById('last-update').textContent = `MAJ ${d.toLocaleString('fr-FR', {dateStyle:'short',timeStyle:'short'})}`;
     render();
 
-    // Charger les prochains matchs pour les equipes Tier1 (en parallele apres le render initial)
-    const targetTeams = DATA.teams.filter(t => t.isTier1);
-    loadFixtures(targetTeams);
+    // 1) TOP 4 : appel /api/live-odds (The Odds API) pour les cotes live
+    //    -> trouve dans l'ordre du tableau (deja trie par ROI 5y desc + Tier1 d'abord)
+    const top4 = DATA.teams.filter(t => t.isElite || t.isTier1).slice(0, 4);
+    loadLiveOdds(top4);
+
+    // 2) Reste des Tier1 : fallback fixturedownload.com (sans cotes mais avec date)
+    const otherTier1 = DATA.teams.filter(t => t.isTier1).slice(4);
+    loadFixtures(otherTier1);
   } catch (e) {
     document.getElementById('content').innerHTML =
       `<p style="color:var(--red);text-align:center;padding:40px">Erreur de chargement : ${e.message}</p>`;

@@ -8,6 +8,9 @@
     },
     "api/historical-odds.js": {
       "maxDuration": 10
+    },
+    "api/live-odds.js": {
+      "maxDuration": 15
     }
   }
 }
