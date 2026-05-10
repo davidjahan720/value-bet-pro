@@ -331,6 +331,44 @@ function findBestMarket(t) {
   return best;
 }
 
+function fmtNextMatch(t) {
+  // Priorite : fixturedownload (precis), fallback : nextMatches du CSV football-data
+  if (t.nextHomeFixture) {
+    const d = new Date(t.nextHomeFixture.date);
+    const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' });
+    return `<div style="font-weight:600;color:var(--text)">${dateStr}</div><div style="font-size:10px;color:var(--muted)">vs ${t.nextHomeFixture.opponent}</div>`;
+  }
+  if (t.nextMatches && t.nextMatches.length > 0) {
+    const next = t.nextMatches[0];
+    return `<div style="font-weight:600;color:var(--text)">${next.date}</div><div style="font-size:10px;color:var(--muted)">vs ${next.opponent}</div>`;
+  }
+  return '<span class="roi-zero">—</span>';
+}
+
+function fmtRecommendedBet(t) {
+  // Marche avec le meilleur ROI sur historique 5y. C'est la recommandation pour le prochain match dom.
+  const bestKey = findBestMarket(t);
+  if (!bestKey) return '<span class="roi-zero">—</span>';
+  const m = t.markets[bestKey];
+  const labelMap = {
+    'win': '✅ Victoire',
+    'win_over25': '🎯 V + Over 2.5',
+    'over25': '⚽ Over 2.5',
+    'under25': '🛡 Under 2.5',
+    'dc1x': '🤝 Double Chance 1X',
+    'ah_minus1': '💪 AH -1 (gagner par 2+)',
+  };
+  const label = labelMap[bestKey] || m.label;
+  const roiCls = m.roi_5y > 20 ? 'roi-strong' : (m.roi_5y >= 10 ? 'roi-pos' : 'roi-pos');
+  return `
+    <div style="font-weight:700;color:var(--accent-2)">${label}</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:2px">
+      <span class="${roiCls}">ROI 5y ${m.roi_5y >= 0 ? '+' : ''}${m.roi_5y.toFixed(1)}%</span>
+      · n=${m.n_5y}
+    </div>
+  `;
+}
+
 function render() {
   const filtered = applyFilters(DATA.teams);
   const sorted = sortTeams(filtered);
@@ -369,22 +407,12 @@ function render() {
           <th class="num market-header">U 2.5 ROI 5y</th>
           <th class="num market-header">DC 1X ROI 5y</th>
           <th class="num market-header">AH -1 ROI 5y</th>
-          <th class="num market-header">⭐ Best</th>
-          <th>Saisons V+O2.5</th>
+          <th>📅 Prochain dom.</th>
+          <th>🎯 Pari recommandé</th>
         </tr>
       </thead>
       <tbody>
         ${sorted.map((t, i) => {
-          const best = findBestMarket(t);
-          const bestM = best ? t.markets[best] : null;
-          // detail saisons V+O2.5 (juste les 5 backtest)
-          const seasonsCell = ['2021','2122','2223','2324','2425'].map(s => {
-            const d = t.markets.win_over25?.perSeason?.[s];
-            const lbl = {'2021':'20-21','2122':'21-22','2223':'22-23','2324':'23-24','2425':'24-25'}[s];
-            if (!d) return `<span style="opacity:0.3;font-size:9px">${lbl}: —</span>`;
-            const cls = d.roi >= 0 ? 'roi-pos' : 'roi-neg';
-            return `<span class="${cls}" style="font-size:9px">${lbl}: ${d.roi >= 0 ? '+' : ''}${d.roi.toFixed(0)}%</span>`;
-          }).join(' ');
           return `
             <tr class="${t.isElite ? 'elite' : ''}">
               <td>${i+1}</td>
@@ -396,8 +424,8 @@ function render() {
               <td class="num market-cell">${fmtRoi(t.markets.under25?.roi_5y)}</td>
               <td class="num market-cell">${fmtRoi(t.markets.dc1x?.roi_5y)}</td>
               <td class="num market-cell">${fmtRoi(t.markets.ah_minus1?.roi_5y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.ah_minus1?.n_5y || 0}</span></td>
-              <td class="num market-cell">${best ? `<strong>${bestM.label}</strong><br>${fmtRoi(bestM.roi_5y)}` : '<span class="roi-zero">—</span>'}</td>
-              <td>${seasonsCell}</td>
+              <td>${fmtNextMatch(t)}</td>
+              <td style="background:rgba(163,113,247,0.08)">${fmtRecommendedBet(t)}</td>
             </tr>
           `;
         }).join('')}
@@ -407,6 +435,29 @@ function render() {
     ${sorted.length === 0 ? '<p style="text-align:center;color:var(--muted);padding:40px">Aucune équipe ne correspond aux filtres.</p>' : ''}
   `;
   document.getElementById('content').innerHTML = html;
+}
+
+async function loadFixtures(targetTeams) {
+  // Charge les prochains matchs domicile via /api/upcoming-fixtures (fixturedownload.com)
+  // pour les equipes Tier1/Elite uniquement (limiter la charge)
+  if (targetTeams.length === 0) return;
+  const param = targetTeams.map(t => `${t.team}|${t.league}`).join(',');
+  try {
+    const r = await fetch(`/api/upcoming-fixtures?teams=${encodeURIComponent(param)}&days=14&season=2526`);
+    if (!r.ok) return;
+    const j = await r.json();
+    const map = new Map();
+    for (const f of j.fixtures || []) {
+      if (f.nextHome) map.set(`${f.team}|${f.league}`, f.nextHome);
+    }
+    for (const t of DATA.teams) {
+      const k = `${t.team}|${t.league}`;
+      if (map.has(k)) t.nextHomeFixture = map.get(k);
+    }
+    render();
+  } catch (e) {
+    console.warn("Fixtures KO:", e);
+  }
 }
 
 async function loadData() {
@@ -429,6 +480,10 @@ async function loadData() {
     const d = new Date(DATA.lastUpdate);
     document.getElementById('last-update').textContent = `MAJ ${d.toLocaleString('fr-FR', {dateStyle:'short',timeStyle:'short'})}`;
     render();
+
+    // Charger les prochains matchs pour les equipes Tier1 (en parallele apres le render initial)
+    const targetTeams = DATA.teams.filter(t => t.isTier1);
+    loadFixtures(targetTeams);
   } catch (e) {
     document.getElementById('content').innerHTML =
       `<p style="color:var(--red);text-align:center;padding:40px">Erreur de chargement : ${e.message}</p>`;
