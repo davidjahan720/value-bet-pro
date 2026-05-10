@@ -223,6 +223,11 @@
     <p>ROI portfolio Élite : <strong>+29.94 %</strong> sur 1 038 paris (vs +16.43 % pour le « 1 sec »). Cote moyenne ~3.00 — bankroll min recommandée : 80-100 unités.</p>
   </div>
 
+  <div class="market-section" style="border-left-color: var(--gold)">
+    <h3 style="color: var(--gold)">🧭 Recommandation hybride (mode actif)</h3>
+    <p>Si la cote du prochain match est disponible, on détermine le <strong>bucket</strong> (Très favori / Favori normal / Pick'em / Outsider) et on prend le marché qui a le meilleur ROI <em>conditionné à ce type de match</em> (n≥30 dans le bucket). Sinon, fallback sur la reco globale (best ROI 5y, n≥20).</p>
+  </div>
+
   <div class="summary" id="summary"></div>
 
   <div class="controls">
@@ -331,6 +336,45 @@ function findBestMarket(t) {
   return best;
 }
 
+function getBucket(oddsH) {
+  if (!oddsH || oddsH <= 0) return null;
+  if (oddsH < 1.50) return "TF";
+  if (oddsH < 2.00) return "FN";
+  if (oddsH < 2.80) return "PE";
+  return "OU";
+}
+const BUCKET_LABEL = {
+  "TF": "Très favori (cote<1.50)",
+  "FN": "Favori normal (1.50-2.00)",
+  "PE": "Pick'em (2.00-2.80)",
+  "OU": "Outsider (≥2.80)",
+};
+const BUCKET_LABEL_SHORT = { TF: "TF", FN: "FN", PE: "PE", OU: "OU" };
+const MIN_BUCKET_N = 30;  // sample minimum pour activer la reco par bucket
+
+function findBestMarketInBucket(t, bucket) {
+  // Pour le bucket donne, trouver le marche au plus haut ROI parmi ceux avec n >= MIN_BUCKET_N
+  let best = null; let bestRoi = -Infinity;
+  for (const [k, m] of Object.entries(t.markets)) {
+    const b = m.buckets?.[bucket];
+    if (!b || b.n < MIN_BUCKET_N || b.roi === null) continue;
+    if (b.roi > bestRoi) { bestRoi = b.roi; best = k; }
+  }
+  return best;
+}
+
+function getNextMatchOdds(t) {
+  // Cherche la cote H du prochain match (1) dans nextMatches du CSV football-data
+  // 2) sinon dans nextHomeFixture (mais fixturedownload.com ne fournit pas la cote)
+  if (t.nextMatches && t.nextMatches.length > 0 && t.nextMatches[0].odds > 0) {
+    return t.nextMatches[0].odds;
+  }
+  if (t.nextHomeFixture && t.nextHomeFixture.odds > 0) {
+    return t.nextHomeFixture.odds;
+  }
+  return null;
+}
+
 function fmtNextMatch(t) {
   // Priorite : fixturedownload (precis), fallback : nextMatches du CSV football-data
   if (t.nextHomeFixture) {
@@ -346,10 +390,11 @@ function fmtNextMatch(t) {
 }
 
 function fmtRecommendedBet(t) {
-  // Marche avec le meilleur ROI sur historique 5y. C'est la recommandation pour le prochain match dom.
-  const bestKey = findBestMarket(t);
-  if (!bestKey) return '<span class="roi-zero">—</span>';
-  const m = t.markets[bestKey];
+  // RECO HYBRIDE :
+  //   1) Si on a la cote du prochain match -> determiner le bucket
+  //      -> chercher le best marche dans ce bucket avec n >= MIN_BUCKET_N
+  //      -> sinon fallback sur la reco globale
+  //   2) Si pas de cote -> reco globale (best ROI 5y, n >= 20)
   const labelMap = {
     'win': '✅ Victoire',
     'win_over25': '🎯 V + Over 2.5',
@@ -358,14 +403,47 @@ function fmtRecommendedBet(t) {
     'dc1x': '🤝 Double Chance 1X',
     'ah_minus1': '💪 AH -1 (gagner par 2+)',
   };
+
+  const nextOdds = getNextMatchOdds(t);
+  const bucket = getBucket(nextOdds);
+
+  // Mode 1 : reco par bucket si cote dispo et bucket suffisant
+  if (bucket) {
+    const bucketBest = findBestMarketInBucket(t, bucket);
+    if (bucketBest) {
+      const m = t.markets[bucketBest];
+      const b = m.buckets[bucket];
+      const label = labelMap[bucketBest] || m.label;
+      const roiCls = b.roi > 20 ? 'roi-strong' : (b.roi >= 10 ? 'roi-pos' : (b.roi >= 0 ? 'roi-pos' : 'roi-neg'));
+      return `
+        <div style="font-weight:700;color:var(--accent-2)">${label}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">
+          <span class="${roiCls}">ROI ${b.roi >= 0 ? '+' : ''}${b.roi.toFixed(1)}%</span>
+          · n=${b.n} · cote=${nextOdds.toFixed(2)}
+        </div>
+        <div style="font-size:9px;color:var(--accent-2);margin-top:1px;font-weight:600">
+          🧭 Bucket : ${BUCKET_LABEL[bucket]}
+        </div>
+      `;
+    }
+  }
+
+  // Mode 2 (fallback) : reco globale historique
+  const bestKey = findBestMarket(t);
+  if (!bestKey) return '<span class="roi-zero">—</span>';
+  const m = t.markets[bestKey];
   const label = labelMap[bestKey] || m.label;
   const roiCls = m.roi_5y > 20 ? 'roi-strong' : (m.roi_5y >= 10 ? 'roi-pos' : 'roi-pos');
+  const noteSuffix = bucket
+    ? `<div style="font-size:9px;color:var(--muted);margin-top:1px">📊 sample bucket insuffisant — reco globale</div>`
+    : `<div style="font-size:9px;color:var(--muted);margin-top:1px">📊 cote indisponible — reco globale</div>`;
   return `
     <div style="font-weight:700;color:var(--accent-2)">${label}</div>
     <div style="font-size:10px;color:var(--muted);margin-top:2px">
       <span class="${roiCls}">ROI 5y ${m.roi_5y >= 0 ? '+' : ''}${m.roi_5y.toFixed(1)}%</span>
       · n=${m.n_5y}
     </div>
+    ${noteSuffix}
   `;
 }
 

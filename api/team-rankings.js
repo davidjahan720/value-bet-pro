@@ -80,6 +80,19 @@ function parseDate(s) {
   return new Date(`${y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`);
 }
 
+// Buckets de cote H (proxy force adverse)
+//   TF = Tres favori (cote H < 1.50)
+//   FN = Favori normal (1.50-2.00)
+//   PE = Pick'em (2.00-2.80)
+//   OU = Outsider (>= 2.80)
+function getBucket(oddsH) {
+  if (!oddsH || oddsH <= 0) return null;
+  if (oddsH < 1.50) return "TF";
+  if (oddsH < 2.00) return "FN";
+  if (oddsH < 2.80) return "PE";
+  return "OU";
+}
+
 // MARKETS = liste des marches a tracker
 // Chaque marche : { key, label, computeBet(row) -> { odds, won } | null }
 const MARKETS = [
@@ -192,6 +205,12 @@ export default async function handler(req, res) {
             init.perMarketSeason[m.key] = {};
           }
           teamData.set(key, init);
+          // ajout du tracking par bucket : byBucket[marketKey][bucket] = [n,m,r,w]
+          const tdNew = teamData.get(key);
+          tdNew.byBucket = {};
+          for (const m of MARKETS) {
+            tdNew.byBucket[m.key] = { TF:[0,0,0,0], FN:[0,0,0,0], PE:[0,0,0,0], OU:[0,0,0,0] };
+          }
         }
         const td = teamData.get(key);
 
@@ -207,6 +226,10 @@ export default async function handler(req, res) {
         }
         if (!["H","D","A"].includes(ftr)) continue;
 
+        // Determiner le bucket selon la cote H
+        const oddsH = fnum(row, "AvgH", "BbAvH", "B365H");
+        const bucket = getBucket(oddsH);
+
         // Pour chaque marche, calculer le resultat du pari
         for (const m of MARKETS) {
           const result = m.compute(row);
@@ -215,6 +238,12 @@ export default async function handler(req, res) {
           const ps = td.perMarketSeason[m.key][season];
           ps[0]++; ps[1]++;
           if (result.won) { ps[2] += result.odds; ps[3]++; }
+          // bucket
+          if (bucket) {
+            const bs = td.byBucket[m.key][bucket];
+            bs[0]++; bs[1]++;
+            if (result.won) { bs[2] += result.odds; bs[3]++; }
+          }
         }
       }
     }
@@ -260,6 +289,22 @@ export default async function handler(req, res) {
         const tot_r = bk_r + oos[2] + next[2];
         const tot_w = bk_w + oos[3] + next[3];
 
+        // ROI par bucket (TF/FN/PE/OU) sur l'ensemble des saisons
+        const buckets = {};
+        const bb = td.byBucket[m.key];
+        for (const b of ["TF","FN","PE","OU"]) {
+          const v = bb[b];
+          if (v[1] > 0) {
+            buckets[b] = {
+              n: v[0],
+              w: v[3],
+              roi: +((v[2]-v[1])/v[1]*100).toFixed(2),
+            };
+          } else {
+            buckets[b] = { n: 0, w: 0, roi: null };
+          }
+        }
+
         markets[m.key] = {
           label: m.label,
           n_5y: bk_n, n_oos: oos[0], n_next: next[0], n_total: tot_n,
@@ -271,6 +316,7 @@ export default async function handler(req, res) {
           profit_total: +(tot_r-tot_m).toFixed(2),
           posSeasons: `${pos_s}/${nb_s}`,
           perSeason,
+          buckets,
         };
 
         if (m.key === "win") {
