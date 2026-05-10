@@ -11,6 +11,9 @@
     },
     "api/live-odds.js": {
       "maxDuration": 15
+    },
+    "api/bet-log.js": {
+      "maxDuration": 30
     }
   }
 }

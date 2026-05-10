@@ -269,6 +269,15 @@
     </div>
   </div>
 
+  <div class="panel" id="betlog-panel" style="display:none">
+    <h2>📓 Bet log historique — Top 4 Élite (walk-forward sans lookahead)</h2>
+    <p style="font-size:11px;color:var(--muted);margin:-8px 0 16px">
+      Simulation : chaque pari de 1 € a été placé sur le marché recommandé par la strat (bucket si n≥30 disponible, sinon global), en n'utilisant que les matchs joués <em>avant</em> celui-ci. Aucun biais de regard en avant.
+    </p>
+    <div id="betlog-summary"></div>
+    <div id="betlog-teams"></div>
+  </div>
+
   <div class="footer">
     <p>
       <strong>Marchés affichés :</strong> 1 sec (1N2 home win) · Victoire + Over 2.5 (combiné) · AH -1 (favori dom doit gagner par 2+). Pour chaque marché, ROI 5y backtest (2020-21 à 2024-25) + 2 dernières saisons en colonnes dédiées.
@@ -550,6 +559,125 @@ function render() {
   document.getElementById('content').innerHTML = html;
 }
 
+async function loadBetLog(top4Teams) {
+  // Walk-forward backtest pour les top 4 - simule la strat sur l'historique
+  if (top4Teams.length === 0) return;
+  const param = top4Teams.map(t => `${t.team}|${t.league}`).join(',');
+  try {
+    const r = await fetch(`/api/bet-log?teams=${encodeURIComponent(param)}`);
+    if (!r.ok) {
+      console.warn("Bet log KO:", r.status);
+      return;
+    }
+    const j = await r.json();
+    renderBetLog(j);
+  } catch (e) {
+    console.warn("Bet log error:", e);
+  }
+}
+
+function renderBetLog(data) {
+  const panel = document.getElementById('betlog-panel');
+  panel.style.display = 'block';
+  const o = data.overall;
+  const roiCls = o.roi > 10 ? 'roi-strong' : (o.roi >= 0 ? 'roi-pos' : 'roi-neg');
+  const profitCls = o.profit >= 0 ? 'roi-pos' : 'roi-neg';
+
+  document.getElementById('betlog-summary').innerHTML = `
+    <div class="summary" style="grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));margin-bottom:20px">
+      <div class="stat highlight">
+        <div class="stat-value ${roiCls}" style="display:inline-block">${o.roi >= 0 ? '+' : ''}${o.roi}%</div>
+        <div class="stat-label">ROI cumulé</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${o.n_bets}</div>
+        <div class="stat-label">Paris simulés</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${o.wins} <span style="color:var(--muted);font-size:12px">(${o.winRate}%)</span></div>
+        <div class="stat-label">Victoires</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${o.total_stake}€</div>
+        <div class="stat-label">Mise totale</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value ${profitCls}" style="display:inline-block">${o.profit >= 0 ? '+' : ''}${o.profit.toFixed(2)}€</div>
+        <div class="stat-label">Profit net</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" style="color:var(--green)">${o.total_return.toFixed(2)}€</div>
+        <div class="stat-label">Retour total</div>
+      </div>
+    </div>
+  `;
+
+  let html = '';
+  for (const t of data.teams) {
+    const teamRoiCls = t.roi > 10 ? 'roi-strong' : (t.roi >= 0 ? 'roi-pos' : 'roi-neg');
+    const teamProfitCls = t.profit >= 0 ? 'roi-pos' : 'roi-neg';
+    const recentLog = [...t.log].reverse().slice(0, 30); // 30 derniers paris
+
+    html += `
+      <details class="betlog-team" style="margin-bottom:14px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:12px">
+        <summary style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-weight:700;font-size:14px">${t.team} <span style="font-size:11px;color:var(--muted)">${t.leagueName}</span></span>
+          <span style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px">
+            <span>${t.n_bets} paris</span>
+            <span>${t.wins} V (${t.winRate}%)</span>
+            <span class="${teamProfitCls}">${t.profit >= 0 ? '+' : ''}${t.profit.toFixed(2)}€</span>
+            <span class="${teamRoiCls}">ROI ${t.roi >= 0 ? '+' : ''}${t.roi}%</span>
+          </span>
+        </summary>
+        <div style="margin-top:14px;overflow-x:auto">
+          <table style="font-size:11px;width:100%">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Adversaire</th>
+                <th>Bucket</th>
+                <th>Cote 1</th>
+                <th>Pari placé</th>
+                <th>Cote pari</th>
+                <th>Score</th>
+                <th>Issue</th>
+                <th class="num">P&L</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${recentLog.map(b => {
+                const issueCls = b.won ? 'roi-pos' : 'roi-neg';
+                const issueText = b.won ? '✓ GAGNÉ' : '✗ PERDU';
+                const pl = b.won ? `+${b.profit.toFixed(2)}€` : `${b.profit.toFixed(2)}€`;
+                const modeBadge = b.recommended.mode === 'bucket'
+                  ? '<span style="font-size:9px;background:rgba(163,113,247,0.15);color:var(--accent-2);padding:1px 4px;border-radius:3px">B</span>'
+                  : '<span style="font-size:9px;background:rgba(139,148,158,0.15);color:var(--muted);padding:1px 4px;border-radius:3px">G</span>';
+                return `
+                  <tr>
+                    <td style="font-family:monospace">${b.date}</td>
+                    <td>${b.opponent}</td>
+                    <td><span style="font-size:9px;background:var(--panel);padding:1px 5px;border-radius:3px">${b.bucket || '—'}</span></td>
+                    <td class="num">${b.cote_H?.toFixed(2) || '—'}</td>
+                    <td>${b.recommended.emoji} ${b.recommended.label} ${modeBadge}</td>
+                    <td class="num">${b.bet_odds}</td>
+                    <td style="font-family:monospace">${b.result_score}</td>
+                    <td class="${issueCls}" style="font-weight:600">${issueText}</td>
+                    <td class="num ${issueCls}" style="font-weight:600">${pl}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+          <p style="font-size:10px;color:var(--muted);margin-top:8px">
+            30 derniers paris affichés sur ${t.n_bets} total — légende : <span style="background:rgba(163,113,247,0.15);color:var(--accent-2);padding:1px 4px;border-radius:3px">B</span> = bucket / <span style="background:rgba(139,148,158,0.15);color:var(--muted);padding:1px 4px;border-radius:3px">G</span> = global fallback
+          </p>
+        </div>
+      </details>
+    `;
+  }
+  document.getElementById('betlog-teams').innerHTML = html;
+}
+
 async function loadLiveOdds(top4Teams) {
   // Appel a /api/live-odds (The Odds API) — limite au TOP 4 pour economiser
   // le quota free 500 req/mois.
@@ -636,6 +764,9 @@ async function loadData() {
     // 2) Reste des Tier1 : fallback fixturedownload.com (sans cotes mais avec date)
     const otherTier1 = DATA.teams.filter(t => t.isTier1).slice(4);
     loadFixtures(otherTier1);
+
+    // 3) Bet log walk-forward pour le TOP 4
+    loadBetLog(top4);
   } catch (e) {
     document.getElementById('content').innerHTML =
       `<p style="color:var(--red);text-align:center;padding:40px">Erreur de chargement : ${e.message}</p>`;
