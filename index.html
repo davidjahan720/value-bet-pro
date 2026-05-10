@@ -580,29 +580,37 @@ function renderBetLog(data) {
   const panel = document.getElementById('betlog-panel');
   panel.style.display = 'block';
 
-  // 2 strategies en parallele
-  const stratWin = data.overall.win;
-  const stratVO = data.overall.win_over25;
+  const seasons = data.seasons || ['2425', '2526'];
+  const labels = data.seasonLabels || {};
 
-  const statCard = (s, color) => {
+  // Card par saison + total pour chaque strat
+  const seasonCard = (s, label, isTotal) => {
     const roiCls = s.roi > 10 ? 'roi-strong' : (s.roi >= 0 ? 'roi-pos' : 'roi-neg');
     const profitCls = s.profit >= 0 ? 'roi-pos' : 'roi-neg';
     return `
-      <div class="stat" style="border-color:${color};background:rgba(${color === 'var(--green)' ? '63,185,80' : '240,195,60'},0.06)">
-        <div style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">${s.emoji} Strat ${s.label}</div>
-        <div style="display:flex;gap:18px;justify-content:center;flex-wrap:wrap">
-          <div>
-            <div class="stat-value ${roiCls}" style="display:inline-block;font-size:18px">${s.roi >= 0 ? '+' : ''}${s.roi}%</div>
-            <div style="font-size:10px;color:var(--muted)">ROI</div>
-          </div>
-          <div>
-            <div class="stat-value ${profitCls}" style="display:inline-block;font-size:18px">${s.profit >= 0 ? '+' : ''}${s.profit.toFixed(0)}€</div>
-            <div style="font-size:10px;color:var(--muted)">Profit</div>
-          </div>
-          <div>
-            <div class="stat-value" style="font-size:18px">${s.wins}/${s.n_bets}</div>
-            <div style="font-size:10px;color:var(--muted)">V (${s.winRate}%)</div>
-          </div>
+      <div style="padding:8px 10px;background:${isTotal ? 'rgba(247,129,102,0.08)' : 'var(--panel-2)'};border-radius:5px;${isTotal ? 'border:1px solid var(--accent);' : ''}">
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">${label}${isTotal ? ' ★' : ''}</div>
+        <div style="display:flex;gap:10px;justify-content:space-between;align-items:center">
+          <span class="${roiCls}" style="font-size:14px;font-weight:700">${s.roi >= 0 ? '+' : ''}${s.roi}%</span>
+          <span class="${profitCls}" style="font-size:11px">${s.profit >= 0 ? '+' : ''}${s.profit.toFixed(1)}€</span>
+          <span style="font-size:10px;color:var(--muted)">${s.wins}/${s.n_bets}</span>
+        </div>
+      </div>
+    `;
+  };
+
+  const stratBlock = (stratData, color, emoji, name) => {
+    const cards = seasons.map(seas =>
+      seasonCard(stratData.bySeason[seas], labels[seas] || seas, false)
+    ).join('');
+    return `
+      <div style="border:1px solid ${color};border-radius:8px;padding:14px;background:rgba(${color === 'var(--green)' ? '63,185,80' : '240,195,60'},0.04)">
+        <div style="font-size:12px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">
+          ${emoji} Strat ${name}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(${seasons.length + 1}, 1fr);gap:8px">
+          ${cards}
+          ${seasonCard(stratData.total, 'TOTAL ' + seasons.length + ' ans', true)}
         </div>
       </div>
     `;
@@ -610,83 +618,128 @@ function renderBetLog(data) {
 
   document.getElementById('betlog-summary').innerHTML = `
     <div class="summary" style="grid-template-columns:repeat(2, 1fr);gap:14px;margin-bottom:20px">
-      ${statCard(stratWin, 'var(--green)')}
-      ${statCard(stratVO, 'var(--gold)')}
+      ${stratBlock(data.overall.win, 'var(--green)', '✅', '1 sec')}
+      ${stratBlock(data.overall.win_over25, 'var(--gold)', '🎯', 'V + Over 2.5')}
     </div>
   `;
 
   let html = '';
   for (const t of data.teams) {
+    if (t.n_matches === 0) continue;
     const stW = t.strats.win;
     const stV = t.strats.win_over25;
-    const recentLog = [...t.log].reverse().slice(0, 30);
+    const teamRoiWTot = stW.total.roi > 10 ? 'roi-strong' : (stW.total.roi >= 0 ? 'roi-pos' : 'roi-neg');
+    const teamRoiVTot = stV.total.roi > 10 ? 'roi-strong' : (stV.total.roi >= 0 ? 'roi-pos' : 'roi-neg');
 
-    const teamRoiW = stW.roi > 10 ? 'roi-strong' : (stW.roi >= 0 ? 'roi-pos' : 'roi-neg');
-    const teamRoiV = stV.roi > 10 ? 'roi-strong' : (stV.roi >= 0 ? 'roi-pos' : 'roi-neg');
+    // Petit tableau par saison dans le summary
+    const seasonsSummary = seasons.map(seas => {
+      const w = stW.bySeason[seas];
+      const v = stV.bySeason[seas];
+      return `
+        <tr>
+          <td style="font-size:11px;font-weight:600;color:var(--muted);padding:4px 8px">${labels[seas] || seas}</td>
+          <td style="padding:4px 8px;font-size:11px;background:rgba(63,185,80,0.04)">
+            ${w.n_bets > 0
+              ? `<span class="${w.roi >= 10 ? 'roi-strong' : (w.roi >= 0 ? 'roi-pos' : 'roi-neg')}">ROI ${w.roi >= 0 ? '+' : ''}${w.roi}%</span> · ${w.wins}/${w.n_bets} V (${w.winRate}%) · ${w.profit >= 0 ? '+' : ''}${w.profit.toFixed(2)}€`
+              : '<span class="roi-zero">— aucun match</span>'}
+          </td>
+          <td style="padding:4px 8px;font-size:11px;background:rgba(240,195,60,0.04)">
+            ${v.n_bets > 0
+              ? `<span class="${v.roi >= 10 ? 'roi-strong' : (v.roi >= 0 ? 'roi-pos' : 'roi-neg')}">ROI ${v.roi >= 0 ? '+' : ''}${v.roi}%</span> · ${v.wins}/${v.n_bets} V (${v.winRate}%) · ${v.profit >= 0 ? '+' : ''}${v.profit.toFixed(2)}€`
+              : '<span class="roi-zero">— aucun match</span>'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Log groupe par saison
+    const logBySeason = {};
+    for (const seas of seasons) logBySeason[seas] = [];
+    for (const b of t.log) {
+      if (logBySeason[b.season]) logBySeason[b.season].push(b);
+    }
+
+    const logTablesBySeason = seasons.map(seas => {
+      const matches = logBySeason[seas] || [];
+      if (matches.length === 0) return `<p style="font-size:11px;color:var(--muted);margin:10px 0 4px"><strong>${labels[seas] || seas}</strong> · aucun match</p>`;
+      return `
+        <div style="margin-top:14px">
+          <h4 style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent)">${labels[seas] || seas} · ${matches.length} matchs</h4>
+          <div style="overflow-x:auto">
+            <table style="font-size:11px;width:100%">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Adversaire</th>
+                  <th>Bucket</th>
+                  <th class="num">Cote 1</th>
+                  <th class="num" style="background:rgba(63,185,80,0.08)">✅ 1 sec</th>
+                  <th class="num" style="background:rgba(63,185,80,0.08)">Issue</th>
+                  <th class="num" style="background:rgba(240,195,60,0.08)">🎯 V+O2.5</th>
+                  <th class="num" style="background:rgba(240,195,60,0.08)">Issue</th>
+                  <th>Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${matches.map(b => {
+                  const fmtBet = (bet) => {
+                    if (!bet) return { cell: '<span class="roi-zero">—</span>', issue: '<span class="roi-zero">—</span>' };
+                    const issueCls = bet.won ? 'roi-pos' : 'roi-neg';
+                    const issueText = bet.won ? `+${bet.profit.toFixed(2)}€` : `${bet.profit.toFixed(2)}€`;
+                    return {
+                      cell: `<span style="font-variant-numeric:tabular-nums">@${bet.odds.toFixed(2)}</span>`,
+                      issue: `<span class="${issueCls}" style="font-weight:600;font-variant-numeric:tabular-nums">${issueText}</span>`,
+                    };
+                  };
+                  const w = fmtBet(b.bets.win);
+                  const v = fmtBet(b.bets.win_over25);
+                  return `
+                    <tr>
+                      <td style="font-family:monospace">${b.date}</td>
+                      <td>${b.opponent}</td>
+                      <td><span style="font-size:9px;background:var(--panel);padding:1px 5px;border-radius:3px">${b.bucket || '—'}</span></td>
+                      <td class="num">${b.cote_H?.toFixed(2) || '—'}</td>
+                      <td class="num" style="background:rgba(63,185,80,0.04)">${w.cell}</td>
+                      <td class="num" style="background:rgba(63,185,80,0.04)">${w.issue}</td>
+                      <td class="num" style="background:rgba(240,195,60,0.04)">${v.cell}</td>
+                      <td class="num" style="background:rgba(240,195,60,0.04)">${v.issue}</td>
+                      <td style="font-family:monospace">${b.result_score}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }).join('');
 
     html += `
       <details class="betlog-team" style="margin-bottom:14px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:12px">
         <summary style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
           <span style="font-weight:700;font-size:14px">${t.team} <span style="font-size:11px;color:var(--muted)">${t.leagueName}</span> <span style="font-size:11px;color:var(--muted)">· ${t.n_matches} matchs</span></span>
           <span style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px">
-            <span>✅ <strong>1 sec</strong> : <span class="${teamRoiW}">ROI ${stW.roi >= 0 ? '+' : ''}${stW.roi}%</span> · ${stW.profit >= 0 ? '+' : ''}${stW.profit.toFixed(0)}€ · ${stW.wins}/${stW.n_bets} V</span>
-            <span>🎯 <strong>V+O2.5</strong> : <span class="${teamRoiV}">ROI ${stV.roi >= 0 ? '+' : ''}${stV.roi}%</span> · ${stV.profit >= 0 ? '+' : ''}${stV.profit.toFixed(0)}€ · ${stV.wins}/${stV.n_bets} V</span>
+            <span>✅ <strong>1 sec</strong> total : <span class="${teamRoiWTot}">ROI ${stW.total.roi >= 0 ? '+' : ''}${stW.total.roi}%</span> · ${stW.total.profit >= 0 ? '+' : ''}${stW.total.profit.toFixed(0)}€</span>
+            <span>🎯 <strong>V+O2.5</strong> total : <span class="${teamRoiVTot}">ROI ${stV.total.roi >= 0 ? '+' : ''}${stV.total.roi}%</span> · ${stV.total.profit >= 0 ? '+' : ''}${stV.total.profit.toFixed(0)}€</span>
           </span>
         </summary>
-        <div style="margin-top:14px;overflow-x:auto">
-          <table style="font-size:11px;width:100%">
+        <div style="margin-top:14px">
+          <table style="font-size:11px;width:100%;margin-bottom:10px">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Adversaire</th>
-                <th>Bucket</th>
-                <th class="num">Cote 1</th>
-                <th class="num" style="background:rgba(63,185,80,0.08)">✅ 1 sec</th>
-                <th class="num" style="background:rgba(63,185,80,0.08)">Issue</th>
-                <th class="num" style="background:rgba(240,195,60,0.08)">🎯 V+O2.5</th>
-                <th class="num" style="background:rgba(240,195,60,0.08)">Issue</th>
-                <th>Score</th>
+                <th>Saison</th>
+                <th style="background:rgba(63,185,80,0.08)">✅ 1 sec</th>
+                <th style="background:rgba(240,195,60,0.08)">🎯 V + Over 2.5</th>
               </tr>
             </thead>
-            <tbody>
-              ${recentLog.map(b => {
-                const winBet = b.bets.win;
-                const voBet = b.bets.win_over25;
-                const fmtBet = (bet) => {
-                  if (!bet) return { cell: '<span class="roi-zero">—</span>', issue: '<span class="roi-zero">—</span>' };
-                  const issueCls = bet.won ? 'roi-pos' : 'roi-neg';
-                  const issueText = bet.won ? `+${bet.profit.toFixed(2)}€` : `${bet.profit.toFixed(2)}€`;
-                  return {
-                    cell: `<span style="font-variant-numeric:tabular-nums">@${bet.odds.toFixed(2)}</span>`,
-                    issue: `<span class="${issueCls}" style="font-weight:600;font-variant-numeric:tabular-nums">${issueText}</span>`,
-                  };
-                };
-                const w = fmtBet(winBet);
-                const v = fmtBet(voBet);
-                return `
-                  <tr>
-                    <td style="font-family:monospace">${b.date}</td>
-                    <td>${b.opponent}</td>
-                    <td><span style="font-size:9px;background:var(--panel);padding:1px 5px;border-radius:3px">${b.bucket || '—'}</span></td>
-                    <td class="num">${b.cote_H?.toFixed(2) || '—'}</td>
-                    <td class="num" style="background:rgba(63,185,80,0.04)">${w.cell}</td>
-                    <td class="num" style="background:rgba(63,185,80,0.04)">${w.issue}</td>
-                    <td class="num" style="background:rgba(240,195,60,0.04)">${v.cell}</td>
-                    <td class="num" style="background:rgba(240,195,60,0.04)">${v.issue}</td>
-                    <td style="font-family:monospace">${b.result_score}</td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
+            <tbody>${seasonsSummary}</tbody>
           </table>
-          <p style="font-size:10px;color:var(--muted);margin-top:8px">
-            30 derniers matchs affichés sur ${t.n_matches} total. Chaque ligne montre les <strong>2 paris simulés en parallèle</strong> (1 sec à gauche, V+O2.5 à droite).
-          </p>
+          ${logTablesBySeason}
         </div>
       </details>
     `;
   }
-  document.getElementById('betlog-teams').innerHTML = html;
+  document.getElementById('betlog-teams').innerHTML = html || '<p style="text-align:center;color:var(--muted);padding:30px">Aucune équipe Élite avec des matchs sur les saisons sélectionnées.</p>';
 }
 
 async function loadLiveOdds(top4Teams) {
@@ -776,8 +829,9 @@ async function loadData() {
     const otherTier1 = DATA.teams.filter(t => t.isTier1).slice(4);
     loadFixtures(otherTier1);
 
-    // 3) Bet log walk-forward pour le TOP 4
-    loadBetLog(top4);
+    // 3) Bet log : toutes les equipes Elite (saisons 24-25 et 25-26)
+    const eliteTeams = DATA.teams.filter(t => t.isElite);
+    loadBetLog(eliteTeams);
   } catch (e) {
     document.getElementById('content').innerHTML =
       `<p style="color:var(--red);text-align:center;padding:40px">Erreur de chargement : ${e.message}</p>`;

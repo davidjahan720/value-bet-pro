@@ -1,9 +1,9 @@
 // Vercel Serverless Function — Bet log historique walk-forward
-// Pour chaque match domicile du top 4 Elite, simule en PARALLELE :
+// Pour chaque match domicile des equipes Elite, simule en PARALLELE :
 //   - Strategie A : "1 sec" (pari sur la victoire a chaque match)
 //   - Strategie B : "V + Over 2.5" (combine victoire + plus de 2,5 buts)
-// Mise 1€ par pari. Pas de selection de marche : les 2 strats jouent partout.
-// Pas de bucket / pas de fallback : c'est juste 2 strats pures.
+// Mise 1€ par pari. Stats decomposees par saison + total.
+// Saisons par defaut : 2425 (passee) et 2526 (en cours).
 
 const LEAGUES = [
   { code: "F1",  name: "Ligue 1 FRA" },
@@ -23,7 +23,10 @@ const LEAGUES = [
   { code: "B1",  name: "Pro League BEL" },
 ];
 
-const SEASONS = ["2021", "2122", "2223", "2324", "2425", "2526", "2627"];
+const SEASON_LABELS = {
+  "2021": "2020-21", "2122": "2021-22", "2223": "2022-23",
+  "2324": "2023-24", "2425": "2024-25", "2526": "2025-26", "2627": "2026-27",
+};
 
 const STRATS = [
   { key: "win",         label: "1 sec",          emoji: "✅" },
@@ -75,7 +78,6 @@ function getBucket(oddsH) {
   return "OU";
 }
 
-// Calcule pour le marche donne (odds, won) sur ce match
 function computeMarket(row, market) {
   const hg = parseInt(row.FTHG); const ag = parseInt(row.FTAG);
   if (isNaN(hg) || isNaN(ag)) return null;
@@ -93,9 +95,29 @@ function computeMarket(row, market) {
   return null;
 }
 
+function emptyStats() {
+  return { n_bets: 0, wins: 0, stake: 0, ret: 0 };
+}
+function finalizeStats(st, strat) {
+  const profit = st.ret - st.stake;
+  return {
+    label: strat.label,
+    emoji: strat.emoji,
+    n_bets: st.n_bets,
+    wins: st.wins,
+    winRate: st.n_bets > 0 ? +(st.wins / st.n_bets * 100).toFixed(1) : 0,
+    stake: st.stake,
+    total_return: +st.ret.toFixed(2),
+    profit: +profit.toFixed(2),
+    roi: st.stake > 0 ? +(profit / st.stake * 100).toFixed(2) : 0,
+  };
+}
+
 export default async function handler(req, res) {
   try {
-    const { teams = "" } = req.query;
+    const { teams = "", seasons: seasonsParam = "2425,2526" } = req.query;
+    const seasons = seasonsParam.split(",").filter(Boolean).map(s => s.trim());
+
     const wanted = teams.split(",").filter(Boolean).map(s => {
       const [team, lg] = s.split("|");
       return { team: (team || "").trim(), league: (lg || "").trim() };
@@ -103,14 +125,12 @@ export default async function handler(req, res) {
     if (wanted.length === 0) {
       return res.status(400).json({ error: "Param 'teams' obligatoire" });
     }
-    if (wanted.length > 6) {
-      return res.status(400).json({ error: "Trop d'equipes (max 6)" });
-    }
+    // Pas de limite de nb d'equipes : on accepte tout le classement Elite.
 
     const teamsData = [];
     for (const w of wanted) {
       const allRows = [];
-      const seasonTasks = SEASONS.map(s =>
+      const seasonTasks = seasons.map(s =>
         fetchCsv(s, w.league).then(rows => ({ season: s, rows }))
       );
       const datasets = await Promise.all(seasonTasks);
@@ -125,10 +145,13 @@ export default async function handler(req, res) {
       }
       allRows.sort((a, b) => a._d - b._d);
 
-      // Stats par strategie
+      // Stats par strategie + par saison
       const stratStats = {};
       for (const s of STRATS) {
-        stratStats[s.key] = { n: 0, wins: 0, stake: 0, ret: 0 };
+        stratStats[s.key] = { total: emptyStats(), bySeason: {} };
+        for (const seas of seasons) {
+          stratStats[s.key].bySeason[seas] = emptyStats();
+        }
       }
 
       const log = [];
@@ -153,12 +176,14 @@ export default async function handler(req, res) {
             continue;
           }
           hasAnyBet = true;
-          stratStats[s.key].n++;
-          stratStats[s.key].stake++;
+          const tot = stratStats[s.key].total;
+          const sea = stratStats[s.key].bySeason[row._season];
+          tot.n_bets++; tot.stake++;
+          if (sea) { sea.n_bets++; sea.stake++; }
           const profit = r.won ? (r.odds - 1) : -1;
           if (r.won) {
-            stratStats[s.key].ret += r.odds;
-            stratStats[s.key].wins++;
+            tot.ret += r.odds; tot.wins++;
+            if (sea) { sea.ret += r.odds; sea.wins++; }
           }
           entry.bets[s.key] = {
             odds: +r.odds.toFixed(2),
@@ -169,21 +194,16 @@ export default async function handler(req, res) {
         if (hasAnyBet) log.push(entry);
       }
 
-      // Calcul ROI/profit par strat
+      // Mise en forme
       const summaryByStrat = {};
       for (const s of STRATS) {
-        const st = stratStats[s.key];
-        const profit = st.ret - st.stake;
+        const bySeason = {};
+        for (const seas of seasons) {
+          bySeason[seas] = finalizeStats(stratStats[s.key].bySeason[seas], s);
+        }
         summaryByStrat[s.key] = {
-          label: s.label,
-          emoji: s.emoji,
-          n_bets: st.n,
-          wins: st.wins,
-          winRate: st.n > 0 ? +(st.wins / st.n * 100).toFixed(1) : 0,
-          stake: st.stake,
-          total_return: +st.ret.toFixed(2),
-          profit: +profit.toFixed(2),
-          roi: st.stake > 0 ? +(profit / st.stake * 100).toFixed(2) : 0,
+          total: finalizeStats(stratStats[s.key].total, s),
+          bySeason,
         };
       }
 
@@ -197,33 +217,40 @@ export default async function handler(req, res) {
       });
     }
 
-    // Agregation globale
+    // Agregation globale (total + par saison)
     const overall = {};
     for (const s of STRATS) {
-      let n = 0, wins = 0, stake = 0, ret = 0;
-      for (const t of teamsData) {
-        const st = t.strats[s.key];
-        n += st.n_bets; wins += st.wins; stake += st.stake; ret += st.total_return;
+      const bySeason = {};
+      let totalSt = emptyStats();
+      for (const seas of seasons) {
+        let seasSt = emptyStats();
+        for (const t of teamsData) {
+          const ts = t.strats[s.key].bySeason[seas];
+          seasSt.n_bets += ts.n_bets;
+          seasSt.wins += ts.wins;
+          seasSt.stake += ts.stake;
+          seasSt.ret += ts.total_return;
+        }
+        bySeason[seas] = finalizeStats(seasSt, s);
+        // Cumul total
+        totalSt.n_bets += seasSt.n_bets;
+        totalSt.wins += seasSt.wins;
+        totalSt.stake += seasSt.stake;
+        totalSt.ret += seasSt.ret;
       }
-      const profit = ret - stake;
       overall[s.key] = {
-        label: s.label,
-        emoji: s.emoji,
-        n_bets: n,
-        wins,
-        winRate: n > 0 ? +(wins / n * 100).toFixed(1) : 0,
-        stake,
-        total_return: +ret.toFixed(2),
-        profit: +profit.toFixed(2),
-        roi: stake > 0 ? +(profit / stake * 100).toFixed(2) : 0,
+        total: finalizeStats(totalSt, s),
+        bySeason,
       };
     }
 
     res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400");
     res.status(200).json({
       lastUpdate: new Date().toISOString(),
-      methodology: "2 strategies pures simulees en parallele (1 sec et V+Over 2.5), mise 1€ par pari sur chaque match dom.",
+      methodology: "2 strategies pures (1 sec et V+Over 2.5), mise 1€ par pari sur chaque match dom., resultats par saison",
       strats: STRATS.map(s => ({ key: s.key, label: s.label, emoji: s.emoji })),
+      seasons,
+      seasonLabels: seasons.reduce((acc, s) => ({ ...acc, [s]: SEASON_LABELS[s] || s }), {}),
       overall,
       teams: teamsData,
     });
