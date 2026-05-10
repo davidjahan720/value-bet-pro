@@ -247,9 +247,6 @@
     <select id="sortBy">
       <option value="win">Tri : ROI 1 sec</option>
       <option value="win_over25">Tri : ROI V+Over 2.5</option>
-      <option value="over25">Tri : ROI Over 2.5</option>
-      <option value="under25">Tri : ROI Under 2.5</option>
-      <option value="dc1x">Tri : ROI DC 1X</option>
       <option value="ah_minus1">Tri : ROI AH -1</option>
     </select>
     <input type="text" id="searchTeam" placeholder="🔍 Recherche équipe..." style="flex: 1; min-width: 200px;">
@@ -268,7 +265,7 @@
 
   <div class="footer">
     <p>
-      <strong>Marchés calculés :</strong> 1 sec (1N2 home win) · Over/Under 2.5 buts · Double Chance 1X · Victoire + Over 2.5 (combiné) · AH -1 (favori dom doit gagner par 2+).
+      <strong>Marchés affichés :</strong> 1 sec (1N2 home win) · Victoire + Over 2.5 (combiné) · AH -1 (favori dom doit gagner par 2+). Pour chaque marché, ROI 5y backtest (2020-21 à 2024-25) + 2 dernières saisons en colonnes dédiées.
     </p>
     <p>
       <strong>Méthodologie :</strong> mise plate 1 €/match domicile, à la cote moyenne marché (Avg* football-data.co.uk). Cote DC 1X synthétisée via 1/(1/H+1/D). AH -1 inclut uniquement les matchs où la ligne handicap = -1.
@@ -326,14 +323,27 @@ function sortTeams(teams) {
   });
 }
 
+// Marches affiches/recommandes (Over 2.5, Under 2.5, DC 1X retires)
+const VISIBLE_MARKETS = ['win', 'win_over25', 'ah_minus1'];
+
 function findBestMarket(t) {
-  // Marche au plus haut ROI 5y pour cette equipe (parmi ceux avec n>=20)
+  // Marche au plus haut ROI 5y pour cette equipe (parmi VISIBLE_MARKETS, n>=20)
   let best = null; let bestRoi = -Infinity;
-  for (const [k, m] of Object.entries(t.markets)) {
-    if (m.n_5y < 20) continue;
+  for (const k of VISIBLE_MARKETS) {
+    const m = t.markets[k];
+    if (!m || m.n_5y < 20) continue;
     if ((m.roi_5y || 0) > bestRoi) { bestRoi = m.roi_5y; best = k; }
   }
   return best;
+}
+
+function fmtSeasonCell(perSeason, season) {
+  const d = perSeason?.[season];
+  if (!d || d.roi === null || d.roi === undefined) {
+    return '<span class="roi-zero">—</span>';
+  }
+  const cls = d.roi > 10 ? 'roi-strong' : (d.roi >= 0 ? 'roi-pos' : 'roi-neg');
+  return `<span class="${cls}">${d.roi >= 0 ? '+' : ''}${d.roi.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${d.n}</span>`;
 }
 
 function getBucket(oddsH) {
@@ -353,9 +363,11 @@ const BUCKET_LABEL_SHORT = { TF: "TF", FN: "FN", PE: "PE", OU: "OU" };
 const MIN_BUCKET_N = 30;  // sample minimum pour activer la reco par bucket
 
 function findBestMarketInBucket(t, bucket) {
-  // Pour le bucket donne, trouver le marche au plus haut ROI parmi ceux avec n >= MIN_BUCKET_N
+  // Pour le bucket donne, trouver le marche au plus haut ROI parmi VISIBLE_MARKETS (n >= MIN_BUCKET_N)
   let best = null; let bestRoi = -Infinity;
-  for (const [k, m] of Object.entries(t.markets)) {
+  for (const k of VISIBLE_MARKETS) {
+    const m = t.markets[k];
+    if (!m) continue;
     const b = m.buckets?.[bucket];
     if (!b || b.n < MIN_BUCKET_N || b.roi === null) continue;
     if (b.roi > bestRoi) { bestRoi = b.roi; best = k; }
@@ -453,7 +465,7 @@ function render() {
 
   // Summary : ROI portfolio par marche (Elite seulement)
   const elite = DATA.teams.filter(t => t.isElite);
-  const summaryHtml = ['win','win_over25','over25','dc1x','ah_minus1','under25'].map(mkey => {
+  const summaryHtml = ['win','win_over25','ah_minus1'].map(mkey => {
     const totN = elite.reduce((s,t) => s + (t.markets[mkey]?.n_total || 0), 0);
     const totProfit = elite.reduce((s,t) => s + (t.markets[mkey]?.profit_total || 0), 0);
     const roi = totN > 0 ? (totProfit/totN*100) : 0;
@@ -480,10 +492,11 @@ function render() {
           <th class="sortable">Équipe</th>
           <th>Lig.</th>
           <th class="num market-header">1 sec ROI 5y</th>
+          <th class="num market-header">1 sec 24-25</th>
+          <th class="num market-header">1 sec 25-26</th>
           <th class="num market-header best">V+O2.5 ROI 5y</th>
-          <th class="num market-header">O 2.5 ROI 5y</th>
-          <th class="num market-header">U 2.5 ROI 5y</th>
-          <th class="num market-header">DC 1X ROI 5y</th>
+          <th class="num market-header best">V+O2.5 24-25</th>
+          <th class="num market-header best">V+O2.5 25-26</th>
           <th class="num market-header">AH -1 ROI 5y</th>
           <th>📅 Prochain dom.</th>
           <th>🎯 Pari recommandé</th>
@@ -497,10 +510,11 @@ function render() {
               <td><strong>${t.team}</strong>${t.isElite ? ' ★' : ''}</td>
               <td><span class="league-tag ${t.tier}">${t.league}</span></td>
               <td class="num market-cell">${fmtRoi(t.markets.win?.roi_5y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.win?.n_5y || 0}</span></td>
+              <td class="num market-cell">${fmtSeasonCell(t.markets.win?.perSeason, '2425')}</td>
+              <td class="num market-cell">${fmtSeasonCell(t.markets.win?.perSeason, '2526')}</td>
               <td class="num market-cell" style="background:rgba(240,195,60,0.06)">${fmtRoi(t.markets.win_over25?.roi_5y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.win_over25?.n_5y || 0}</span></td>
-              <td class="num market-cell">${fmtRoi(t.markets.over25?.roi_5y)}</td>
-              <td class="num market-cell">${fmtRoi(t.markets.under25?.roi_5y)}</td>
-              <td class="num market-cell">${fmtRoi(t.markets.dc1x?.roi_5y)}</td>
+              <td class="num market-cell" style="background:rgba(240,195,60,0.06)">${fmtSeasonCell(t.markets.win_over25?.perSeason, '2425')}</td>
+              <td class="num market-cell" style="background:rgba(240,195,60,0.06)">${fmtSeasonCell(t.markets.win_over25?.perSeason, '2526')}</td>
               <td class="num market-cell">${fmtRoi(t.markets.ah_minus1?.roi_5y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.ah_minus1?.n_5y || 0}</span></td>
               <td>${fmtNextMatch(t)}</td>
               <td style="background:rgba(163,113,247,0.08)">${fmtRecommendedBet(t)}</td>
