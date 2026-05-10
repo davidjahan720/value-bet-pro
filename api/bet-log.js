@@ -1,10 +1,9 @@
 // Vercel Serverless Function — Bet log historique walk-forward
-// Simule pour chaque match a domicile du top 4 Elite :
-//   1) Determine le bucket de la cote H
-//   2) Choisit le marche recommande par la strat actuelle (bucket si n>=30, sinon global)
-//      en n'utilisant QUE les matchs joues AVANT celui-ci (walk-forward)
-//   3) Calcule si le pari (mise 1€) aurait gagne et le profit/perte
-// Retourne le log par match + statistiques cumulees
+// Pour chaque match domicile du top 4 Elite, simule en PARALLELE :
+//   - Strategie A : "1 sec" (pari sur la victoire a chaque match)
+//   - Strategie B : "V + Over 2.5" (combine victoire + plus de 2,5 buts)
+// Mise 1€ par pari. Pas de selection de marche : les 2 strats jouent partout.
+// Pas de bucket / pas de fallback : c'est juste 2 strats pures.
 
 const LEAGUES = [
   { code: "F1",  name: "Ligue 1 FRA" },
@@ -26,19 +25,10 @@ const LEAGUES = [
 
 const SEASONS = ["2021", "2122", "2223", "2324", "2425", "2526", "2627"];
 
-const MARKETS_LABEL = {
-  "win": "1 sec",
-  "win_over25": "V + Over 2.5",
-  "ah_minus1": "AH -1",
-};
-const MARKETS_EMOJI = {
-  "win": "✅",
-  "win_over25": "🎯",
-  "ah_minus1": "💪",
-};
-const VISIBLE_MARKETS = ["win", "win_over25", "ah_minus1"];
-const MIN_BUCKET_N = 30;
-const MIN_GLOBAL_N = 20;
+const STRATS = [
+  { key: "win",         label: "1 sec",          emoji: "✅" },
+  { key: "win_over25",  label: "V + Over 2.5",   emoji: "🎯" },
+];
 
 function parseCsv(csv) {
   const lines = csv.split(/\r?\n/).filter(l => l.trim());
@@ -58,10 +48,6 @@ function fnum(row, ...keys) {
     if (!isNaN(v) && v > 0) return v;
   }
   return 0;
-}
-function fnumRaw(row, key) {
-  const v = parseFloat(row[key]);
-  return isNaN(v) ? null : v;
 }
 function parseDate(s) {
   if (!s) return null;
@@ -89,8 +75,8 @@ function getBucket(oddsH) {
   return "OU";
 }
 
-// Calcule pour chaque marche le resultat d'un pari sur ce match
-function computeMarketResult(row, market) {
+// Calcule pour le marche donne (odds, won) sur ce match
+function computeMarket(row, market) {
   const hg = parseInt(row.FTHG); const ag = parseInt(row.FTAG);
   if (isNaN(hg) || isNaN(ag)) return null;
   const ftr = row.FTR;
@@ -103,15 +89,6 @@ function computeMarketResult(row, market) {
     const oO = fnum(row, "Avg>2.5", "BbAv>2.5");
     if (oH <= 0 || oO <= 0) return null;
     return { odds: oH * oO, won: ftr === "H" && (hg + ag) > 2.5 };
-  }
-  if (market === "ah_minus1") {
-    const ahh = fnumRaw(row, "AHh");
-    if (ahh !== -1) return null;
-    const odds = fnum(row, "AvgAHH", "BbAvAHH");
-    if (odds <= 0) return null;
-    const margin = hg - ag;
-    if (margin === 1) return null;  // push, exclu
-    return { odds, won: margin >= 2 };
   }
   return null;
 }
@@ -130,8 +107,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Trop d'equipes (max 6)" });
     }
 
-    // Pour chaque equipe, on telecharge ses 7 saisons (multi-ligue eventuel)
-    // mais on suit ses matchs domicile dans la ligue specifiee.
     const teamsData = [];
     for (const w of wanted) {
       const allRows = [];
@@ -148,145 +123,108 @@ export default async function handler(req, res) {
           allRows.push({ ...r, _d: d, _season: season });
         }
       }
-      // Tri chronologique
       allRows.sort((a, b) => a._d - b._d);
 
-      // Walk-forward simulation
-      // Profil rolling : par marche, par bucket [n, mise, retour, w], + global [n, mise, retour, w]
-      const profile = {};
-      for (const m of VISIBLE_MARKETS) {
-        profile[m] = {
-          global: [0, 0, 0, 0],
-          buckets: { TF:[0,0,0,0], FN:[0,0,0,0], PE:[0,0,0,0], OU:[0,0,0,0] },
-        };
-      }
-
-      function pickRecommendation(bucket) {
-        // 1) Si bucket dispo et n>=MIN_BUCKET_N dans au moins un marche : choisir best bucket
-        let bestM = null, bestRoi = -Infinity;
-        if (bucket) {
-          for (const m of VISIBLE_MARKETS) {
-            const b = profile[m].buckets[bucket];
-            if (b[1] < MIN_BUCKET_N) continue;
-            const roi = (b[2] - b[1]) / b[1] * 100;
-            if (roi > bestRoi) { bestRoi = roi; bestM = m; }
-          }
-          if (bestM) return { market: bestM, mode: "bucket", roi_used: bestRoi };
-        }
-        // 2) Fallback global (n>=MIN_GLOBAL_N)
-        for (const m of VISIBLE_MARKETS) {
-          const g = profile[m].global;
-          if (g[1] < MIN_GLOBAL_N) continue;
-          const roi = (g[2] - g[1]) / g[1] * 100;
-          if (roi > bestRoi) { bestRoi = roi; bestM = m; }
-        }
-        if (bestM) return { market: bestM, mode: "global", roi_used: bestRoi };
-        return null;  // pas assez de data pour recommander
+      // Stats par strategie
+      const stratStats = {};
+      for (const s of STRATS) {
+        stratStats[s.key] = { n: 0, wins: 0, stake: 0, ret: 0 };
       }
 
       const log = [];
-      let totalStake = 0, totalReturn = 0, totalWins = 0;
-
       for (const row of allRows) {
         const oddsH = fnum(row, "AvgH", "BbAvH", "B365H");
         const bucket = getBucket(oddsH);
-
-        // Recommandation basee sur le profil ACTUEL (matchs joues avant celui-ci)
-        const rec = pickRecommendation(bucket);
-
-        if (rec) {
-          const result = computeMarketResult(row, rec.market);
-          if (result) {
-            totalStake += 1;
-            const profit = result.won ? (result.odds - 1) : -1;
-            totalReturn += result.won ? result.odds : 0;
-            if (result.won) totalWins++;
-            log.push({
-              date: row.Date,
-              season: row._season,
-              opponent: (row.AwayTeam || "").trim(),
-              cote_H: oddsH,
-              bucket,
-              result_score: `${row.FTHG}-${row.FTAG}`,
-              ftr: row.FTR,
-              recommended: {
-                market: rec.market,
-                label: MARKETS_LABEL[rec.market],
-                emoji: MARKETS_EMOJI[rec.market],
-                mode: rec.mode,
-                roi_at_time: +rec.roi_used.toFixed(2),
-              },
-              bet_odds: +result.odds.toFixed(2),
-              won: result.won,
-              profit: +profit.toFixed(2),
-            });
+        const entry = {
+          date: row.Date,
+          season: row._season,
+          opponent: (row.AwayTeam || "").trim(),
+          cote_H: oddsH || null,
+          bucket,
+          result_score: `${row.FTHG}-${row.FTAG}`,
+          ftr: row.FTR,
+          bets: {},
+        };
+        let hasAnyBet = false;
+        for (const s of STRATS) {
+          const r = computeMarket(row, s.key);
+          if (!r) {
+            entry.bets[s.key] = null;
+            continue;
           }
-        }
-
-        // Mise a jour du profil rolling avec ce match (apres simulation)
-        for (const m of VISIBLE_MARKETS) {
-          const r = computeMarketResult(row, m);
-          if (!r) continue;
-          // global
-          profile[m].global[0]++;
-          profile[m].global[1]++;
-          if (r.won) { profile[m].global[2] += r.odds; profile[m].global[3]++; }
-          // bucket
-          if (bucket) {
-            profile[m].buckets[bucket][0]++;
-            profile[m].buckets[bucket][1]++;
-            if (r.won) { profile[m].buckets[bucket][2] += r.odds; profile[m].buckets[bucket][3]++; }
+          hasAnyBet = true;
+          stratStats[s.key].n++;
+          stratStats[s.key].stake++;
+          const profit = r.won ? (r.odds - 1) : -1;
+          if (r.won) {
+            stratStats[s.key].ret += r.odds;
+            stratStats[s.key].wins++;
           }
+          entry.bets[s.key] = {
+            odds: +r.odds.toFixed(2),
+            won: r.won,
+            profit: +profit.toFixed(2),
+          };
         }
+        if (hasAnyBet) log.push(entry);
       }
 
-      const profit = totalReturn - totalStake;
-      const roi = totalStake > 0 ? +(profit / totalStake * 100).toFixed(2) : 0;
-      const winRate = log.length > 0 ? +(totalWins / log.length * 100).toFixed(1) : 0;
+      // Calcul ROI/profit par strat
+      const summaryByStrat = {};
+      for (const s of STRATS) {
+        const st = stratStats[s.key];
+        const profit = st.ret - st.stake;
+        summaryByStrat[s.key] = {
+          label: s.label,
+          emoji: s.emoji,
+          n_bets: st.n,
+          wins: st.wins,
+          winRate: st.n > 0 ? +(st.wins / st.n * 100).toFixed(1) : 0,
+          stake: st.stake,
+          total_return: +st.ret.toFixed(2),
+          profit: +profit.toFixed(2),
+          roi: st.stake > 0 ? +(profit / st.stake * 100).toFixed(2) : 0,
+        };
+      }
 
       teamsData.push({
         team: w.team,
         league: w.league,
         leagueName: LEAGUES.find(l => l.code === w.league)?.name || w.league,
-        n_bets: log.length,
-        wins: totalWins,
-        winRate,
-        total_stake: totalStake,
-        total_return: +totalReturn.toFixed(2),
-        profit: +profit.toFixed(2),
-        roi,
+        n_matches: log.length,
+        strats: summaryByStrat,
         log,
       });
     }
 
     // Agregation globale
-    const overall_n = teamsData.reduce((s, t) => s + t.n_bets, 0);
-    const overall_wins = teamsData.reduce((s, t) => s + t.wins, 0);
-    const overall_stake = teamsData.reduce((s, t) => s + t.total_stake, 0);
-    const overall_return = teamsData.reduce((s, t) => s + t.total_return, 0);
-    const overall_profit = overall_return - overall_stake;
-    const overall_roi = overall_stake > 0 ? +(overall_profit / overall_stake * 100).toFixed(2) : 0;
-    const overall_winRate = overall_n > 0 ? +(overall_wins / overall_n * 100).toFixed(1) : 0;
+    const overall = {};
+    for (const s of STRATS) {
+      let n = 0, wins = 0, stake = 0, ret = 0;
+      for (const t of teamsData) {
+        const st = t.strats[s.key];
+        n += st.n_bets; wins += st.wins; stake += st.stake; ret += st.total_return;
+      }
+      const profit = ret - stake;
+      overall[s.key] = {
+        label: s.label,
+        emoji: s.emoji,
+        n_bets: n,
+        wins,
+        winRate: n > 0 ? +(wins / n * 100).toFixed(1) : 0,
+        stake,
+        total_return: +ret.toFixed(2),
+        profit: +profit.toFixed(2),
+        roi: stake > 0 ? +(profit / stake * 100).toFixed(2) : 0,
+      };
+    }
 
     res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400");
     res.status(200).json({
       lastUpdate: new Date().toISOString(),
-      methodology: "walk-forward (chaque pari simule n'utilise que les matchs joues AVANT lui)",
-      criteria: {
-        minBucketN: MIN_BUCKET_N,
-        minGlobalN: MIN_GLOBAL_N,
-        markets: VISIBLE_MARKETS,
-        seasons: SEASONS,
-      },
-      overall: {
-        n_bets: overall_n,
-        wins: overall_wins,
-        winRate: overall_winRate,
-        total_stake: overall_stake,
-        total_return: +overall_return.toFixed(2),
-        profit: +overall_profit.toFixed(2),
-        roi: overall_roi,
-      },
+      methodology: "2 strategies pures simulees en parallele (1 sec et V+Over 2.5), mise 1€ par pari sur chaque match dom.",
+      strats: STRATS.map(s => ({ key: s.key, label: s.label, emoji: s.emoji })),
+      overall,
       teams: teamsData,
     });
   } catch (error) {

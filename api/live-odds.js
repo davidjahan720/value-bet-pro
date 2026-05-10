@@ -130,8 +130,21 @@ export default async function handler(req, res) {
       for (const t of teamList) {
         // Cherche les matchs domicile (homeTeam = t.team) a venir
         const homeEvents = events.filter(e => teamMatches(t.team, e.home_team));
+        // Tous les matchs avec t.team implique (dom ou ext) pour debug
+        const allEvents = events.filter(e =>
+          teamMatches(t.team, e.home_team) || teamMatches(t.team, e.away_team)
+        );
         if (homeEvents.length === 0) {
-          results.push({ ...t, nextHome: null });
+          results.push({
+            ...t,
+            nextHome: null,
+            allUpcoming: allEvents.slice(0, 5).map(e => ({
+              date: e.commence_time,
+              home: e.home_team,
+              away: e.away_team,
+              isHome: teamMatches(t.team, e.home_team),
+            })),
+          });
           continue;
         }
         homeEvents.sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
@@ -176,6 +189,12 @@ export default async function handler(req, res) {
             bookmakers: next.bookmakers?.length || 0,
             source: "odds-api-live",
           },
+          allUpcoming: allEvents.slice(0, 5).map(e => ({
+            date: e.commence_time,
+            home: e.home_team,
+            away: e.away_team,
+            isHome: teamMatches(t.team, e.home_team),
+          })),
         });
       }
     } catch (e) {

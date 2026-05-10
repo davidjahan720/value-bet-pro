@@ -579,54 +579,58 @@ async function loadBetLog(top4Teams) {
 function renderBetLog(data) {
   const panel = document.getElementById('betlog-panel');
   panel.style.display = 'block';
-  const o = data.overall;
-  const roiCls = o.roi > 10 ? 'roi-strong' : (o.roi >= 0 ? 'roi-pos' : 'roi-neg');
-  const profitCls = o.profit >= 0 ? 'roi-pos' : 'roi-neg';
+
+  // 2 strategies en parallele
+  const stratWin = data.overall.win;
+  const stratVO = data.overall.win_over25;
+
+  const statCard = (s, color) => {
+    const roiCls = s.roi > 10 ? 'roi-strong' : (s.roi >= 0 ? 'roi-pos' : 'roi-neg');
+    const profitCls = s.profit >= 0 ? 'roi-pos' : 'roi-neg';
+    return `
+      <div class="stat" style="border-color:${color};background:rgba(${color === 'var(--green)' ? '63,185,80' : '240,195,60'},0.06)">
+        <div style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">${s.emoji} Strat ${s.label}</div>
+        <div style="display:flex;gap:18px;justify-content:center;flex-wrap:wrap">
+          <div>
+            <div class="stat-value ${roiCls}" style="display:inline-block;font-size:18px">${s.roi >= 0 ? '+' : ''}${s.roi}%</div>
+            <div style="font-size:10px;color:var(--muted)">ROI</div>
+          </div>
+          <div>
+            <div class="stat-value ${profitCls}" style="display:inline-block;font-size:18px">${s.profit >= 0 ? '+' : ''}${s.profit.toFixed(0)}€</div>
+            <div style="font-size:10px;color:var(--muted)">Profit</div>
+          </div>
+          <div>
+            <div class="stat-value" style="font-size:18px">${s.wins}/${s.n_bets}</div>
+            <div style="font-size:10px;color:var(--muted)">V (${s.winRate}%)</div>
+          </div>
+        </div>
+      </div>
+    `;
+  };
 
   document.getElementById('betlog-summary').innerHTML = `
-    <div class="summary" style="grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));margin-bottom:20px">
-      <div class="stat highlight">
-        <div class="stat-value ${roiCls}" style="display:inline-block">${o.roi >= 0 ? '+' : ''}${o.roi}%</div>
-        <div class="stat-label">ROI cumulé</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value">${o.n_bets}</div>
-        <div class="stat-label">Paris simulés</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value">${o.wins} <span style="color:var(--muted);font-size:12px">(${o.winRate}%)</span></div>
-        <div class="stat-label">Victoires</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value">${o.total_stake}€</div>
-        <div class="stat-label">Mise totale</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value ${profitCls}" style="display:inline-block">${o.profit >= 0 ? '+' : ''}${o.profit.toFixed(2)}€</div>
-        <div class="stat-label">Profit net</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value" style="color:var(--green)">${o.total_return.toFixed(2)}€</div>
-        <div class="stat-label">Retour total</div>
-      </div>
+    <div class="summary" style="grid-template-columns:repeat(2, 1fr);gap:14px;margin-bottom:20px">
+      ${statCard(stratWin, 'var(--green)')}
+      ${statCard(stratVO, 'var(--gold)')}
     </div>
   `;
 
   let html = '';
   for (const t of data.teams) {
-    const teamRoiCls = t.roi > 10 ? 'roi-strong' : (t.roi >= 0 ? 'roi-pos' : 'roi-neg');
-    const teamProfitCls = t.profit >= 0 ? 'roi-pos' : 'roi-neg';
-    const recentLog = [...t.log].reverse().slice(0, 30); // 30 derniers paris
+    const stW = t.strats.win;
+    const stV = t.strats.win_over25;
+    const recentLog = [...t.log].reverse().slice(0, 30);
+
+    const teamRoiW = stW.roi > 10 ? 'roi-strong' : (stW.roi >= 0 ? 'roi-pos' : 'roi-neg');
+    const teamRoiV = stV.roi > 10 ? 'roi-strong' : (stV.roi >= 0 ? 'roi-pos' : 'roi-neg');
 
     html += `
       <details class="betlog-team" style="margin-bottom:14px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:12px">
         <summary style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-          <span style="font-weight:700;font-size:14px">${t.team} <span style="font-size:11px;color:var(--muted)">${t.leagueName}</span></span>
-          <span style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px">
-            <span>${t.n_bets} paris</span>
-            <span>${t.wins} V (${t.winRate}%)</span>
-            <span class="${teamProfitCls}">${t.profit >= 0 ? '+' : ''}${t.profit.toFixed(2)}€</span>
-            <span class="${teamRoiCls}">ROI ${t.roi >= 0 ? '+' : ''}${t.roi}%</span>
+          <span style="font-weight:700;font-size:14px">${t.team} <span style="font-size:11px;color:var(--muted)">${t.leagueName}</span> <span style="font-size:11px;color:var(--muted)">· ${t.n_matches} matchs</span></span>
+          <span style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px">
+            <span>✅ <strong>1 sec</strong> : <span class="${teamRoiW}">ROI ${stW.roi >= 0 ? '+' : ''}${stW.roi}%</span> · ${stW.profit >= 0 ? '+' : ''}${stW.profit.toFixed(0)}€ · ${stW.wins}/${stW.n_bets} V</span>
+            <span>🎯 <strong>V+O2.5</strong> : <span class="${teamRoiV}">ROI ${stV.roi >= 0 ? '+' : ''}${stV.roi}%</span> · ${stV.profit >= 0 ? '+' : ''}${stV.profit.toFixed(0)}€ · ${stV.wins}/${stV.n_bets} V</span>
           </span>
         </summary>
         <div style="margin-top:14px;overflow-x:auto">
@@ -636,40 +640,47 @@ function renderBetLog(data) {
                 <th>Date</th>
                 <th>Adversaire</th>
                 <th>Bucket</th>
-                <th>Cote 1</th>
-                <th>Pari placé</th>
-                <th>Cote pari</th>
+                <th class="num">Cote 1</th>
+                <th class="num" style="background:rgba(63,185,80,0.08)">✅ 1 sec</th>
+                <th class="num" style="background:rgba(63,185,80,0.08)">Issue</th>
+                <th class="num" style="background:rgba(240,195,60,0.08)">🎯 V+O2.5</th>
+                <th class="num" style="background:rgba(240,195,60,0.08)">Issue</th>
                 <th>Score</th>
-                <th>Issue</th>
-                <th class="num">P&L</th>
               </tr>
             </thead>
             <tbody>
               ${recentLog.map(b => {
-                const issueCls = b.won ? 'roi-pos' : 'roi-neg';
-                const issueText = b.won ? '✓ GAGNÉ' : '✗ PERDU';
-                const pl = b.won ? `+${b.profit.toFixed(2)}€` : `${b.profit.toFixed(2)}€`;
-                const modeBadge = b.recommended.mode === 'bucket'
-                  ? '<span style="font-size:9px;background:rgba(163,113,247,0.15);color:var(--accent-2);padding:1px 4px;border-radius:3px">B</span>'
-                  : '<span style="font-size:9px;background:rgba(139,148,158,0.15);color:var(--muted);padding:1px 4px;border-radius:3px">G</span>';
+                const winBet = b.bets.win;
+                const voBet = b.bets.win_over25;
+                const fmtBet = (bet) => {
+                  if (!bet) return { cell: '<span class="roi-zero">—</span>', issue: '<span class="roi-zero">—</span>' };
+                  const issueCls = bet.won ? 'roi-pos' : 'roi-neg';
+                  const issueText = bet.won ? `+${bet.profit.toFixed(2)}€` : `${bet.profit.toFixed(2)}€`;
+                  return {
+                    cell: `<span style="font-variant-numeric:tabular-nums">@${bet.odds.toFixed(2)}</span>`,
+                    issue: `<span class="${issueCls}" style="font-weight:600;font-variant-numeric:tabular-nums">${issueText}</span>`,
+                  };
+                };
+                const w = fmtBet(winBet);
+                const v = fmtBet(voBet);
                 return `
                   <tr>
                     <td style="font-family:monospace">${b.date}</td>
                     <td>${b.opponent}</td>
                     <td><span style="font-size:9px;background:var(--panel);padding:1px 5px;border-radius:3px">${b.bucket || '—'}</span></td>
                     <td class="num">${b.cote_H?.toFixed(2) || '—'}</td>
-                    <td>${b.recommended.emoji} ${b.recommended.label} ${modeBadge}</td>
-                    <td class="num">${b.bet_odds}</td>
+                    <td class="num" style="background:rgba(63,185,80,0.04)">${w.cell}</td>
+                    <td class="num" style="background:rgba(63,185,80,0.04)">${w.issue}</td>
+                    <td class="num" style="background:rgba(240,195,60,0.04)">${v.cell}</td>
+                    <td class="num" style="background:rgba(240,195,60,0.04)">${v.issue}</td>
                     <td style="font-family:monospace">${b.result_score}</td>
-                    <td class="${issueCls}" style="font-weight:600">${issueText}</td>
-                    <td class="num ${issueCls}" style="font-weight:600">${pl}</td>
                   </tr>
                 `;
               }).join('')}
             </tbody>
           </table>
           <p style="font-size:10px;color:var(--muted);margin-top:8px">
-            30 derniers paris affichés sur ${t.n_bets} total — légende : <span style="background:rgba(163,113,247,0.15);color:var(--accent-2);padding:1px 4px;border-radius:3px">B</span> = bucket / <span style="background:rgba(139,148,158,0.15);color:var(--muted);padding:1px 4px;border-radius:3px">G</span> = global fallback
+            30 derniers matchs affichés sur ${t.n_matches} total. Chaque ligne montre les <strong>2 paris simulés en parallèle</strong> (1 sec à gauche, V+O2.5 à droite).
           </p>
         </div>
       </details>
