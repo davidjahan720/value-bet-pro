@@ -34,10 +34,8 @@ const BLOB_TEAMS_PATHNAME = "veille/teams.json";
 const MISTRAL_MODEL       = "mistral-large-latest";
 const MAX_HEADLINES       = 15;
 
-// Selection top N = 4
-const ROTATION_TOP_N       = 4;
-const ROTATION_TOP_POOL    = 10;
-const ROTATION_MIN_ROI3Y   = 40;
+// Selection : top 5 Elite par ROI 3y (sans seuil minimum sur les derniers du top)
+const ROTATION_TOP_N       = 5;
 const ROTATION_SEASONS_3Y  = ["2324", "2425", "2526"];
 
 // Equipes promues en division superieure pour la saison 26-27.
@@ -263,11 +261,9 @@ async function selectTopTeams() {
     });
   }
 
-  // Top pool puis filtre seuil puis top N final
+  // Top N final directement par ROI 3y (pas de seuil minimum)
   candidates.sort((a, b) => b.roi3y - a.roi3y);
-  const pool = candidates.slice(0, ROTATION_TOP_POOL);
-  const qualifying = pool.filter(c => c.roi3y >= ROTATION_MIN_ROI3Y);
-  const top = qualifying.slice(0, ROTATION_TOP_N);
+  const top = candidates.slice(0, ROTATION_TOP_N);
 
   const selected = top.map(c => {
     const ov = TEAM_NAME_OVERRIDES[c.teamName];
@@ -325,13 +321,13 @@ async function getActiveTeams() {
         const payload = {
           teams: fresh,
           selectedAt: now.toISOString(),
-          criteria: `ROI 3y V+O2.5 Elite, top ${ROTATION_TOP_POOL} -> seuil ${ROTATION_MIN_ROI3Y}% -> top ${ROTATION_TOP_N}`,
+          criteria: `Top ${ROTATION_TOP_N} Elite par ROI 3y V+O2.5 (saisons 23-24 / 24-25 / 25-26), sans seuil`,
           excludedPromoted: fresh._excludedPromoted || [],
         };
         await saveTeamsList(payload);
         return { teams: fresh, info: { source: "rotation_today", ...payload } };
       }
-      rotationInfo = { source: "rotation_kept_previous", reason: "0 equipe au seuil +40%" };
+      rotationInfo = { source: "rotation_kept_previous", reason: "Aucun candidat Elite avec >= 2 saisons de donnees" };
     } catch (e) {
       rotationInfo = { source: "rotation_error", error: e.message };
     }

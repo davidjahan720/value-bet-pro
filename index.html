@@ -1183,7 +1183,7 @@ function renderVeille() {
       const d = rot.selectedAt ? new Date(rot.selectedAt) : null;
       txt = `📌 Liste figée depuis la dernière rotation${d ? ' (' + d.toLocaleDateString('fr-FR') + ')' : ''}`;
     } else if (rot.source === 'rotation_kept_previous') {
-      txt = `⚠️ Rotation dimanche : aucune équipe au seuil +40 %, liste précédente maintenue`;
+      txt = `⚠️ Rotation dimanche : aucun candidat valide, liste précédente maintenue`;
     } else if (rot.source === 'rotation_error') {
       txt = `❌ Erreur rotation : ${rot.error || ''}`;
     } else if (rot.source === 'fallback_hardcoded') {
