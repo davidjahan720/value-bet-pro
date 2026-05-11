@@ -16,7 +16,7 @@
       "maxDuration": 30
     },
     "api/veille-cron.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/veille-get.js": {
       "maxDuration": 10

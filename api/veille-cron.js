@@ -199,33 +199,45 @@ export default async function handler(req, res) {
     const teamsOut = {};
     const errors   = [];
 
-    for (const team of TEAMS) {
+    // Traitement des 3 equipes en parallele pour rester sous maxDuration
+    const results = await Promise.all(TEAMS.map(async (team) => {
       try {
         const headlines = await fetchGoogleNewsRss(team);
         const newEvents = await categorizeWithMistral(team, headlines.slice(0, MAX_HEADLINES));
         const oldEvents = existing.teams?.[team.key]?.events || [];
         const merged    = mergeEvents(oldEvents, newEvents);
         const decision  = computeDecision(merged);
-        teamsOut[team.key] = {
-          name: team.name,
-          league: team.league,
-          events: merged,
-          score: decision.score,
-          decision: decision.decision,
-          stake_recommended_eur: decision.stake_recommended_eur,
-          color: decision.color,
-          label: decision.label,
-          activeEventsCount: decision.activeEvents.length,
-          headlinesScanned: headlines.length,
-          newEventsToday: newEvents.length,
+        return {
+          team,
+          payload: {
+            name: team.name,
+            league: team.league,
+            events: merged,
+            score: decision.score,
+            decision: decision.decision,
+            stake_recommended_eur: decision.stake_recommended_eur,
+            color: decision.color,
+            label: decision.label,
+            activeEventsCount: decision.activeEvents.length,
+            headlinesScanned: headlines.length,
+            newEventsToday: newEvents.length,
+          },
         };
       } catch (e) {
-        errors.push({ team: team.key, error: e.message });
-        teamsOut[team.key] = existing.teams?.[team.key] || {
-          name: team.name, league: team.league, events: [], score: 0,
-          decision: "GO_FULL", stake_recommended_eur: 1.0, color: "green", label: "GO PLEIN",
+        return {
+          team,
+          error: e.message,
+          payload: existing.teams?.[team.key] || {
+            name: team.name, league: team.league, events: [], score: 0,
+            decision: "GO_FULL", stake_recommended_eur: 1.0, color: "green", label: "GO PLEIN",
+          },
         };
       }
+    }));
+
+    for (const r of results) {
+      teamsOut[r.team.key] = r.payload;
+      if (r.error) errors.push({ team: r.team.key, error: r.error });
     }
 
     const store = {
