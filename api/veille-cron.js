@@ -12,15 +12,33 @@
 import { put, list } from "@vercel/blob";
 import { CATEGORIES, computeDecision, dedupEvents } from "./decision-matrix.js";
 
-const TEAMS = [
+// Fallback bootstrap (utilise uniquement si veille/teams.json n'existe pas encore)
+const FALLBACK_TEAMS = [
   { key: "aston_villa",     name: "Aston Villa",      league: "Premier League", searchTerms: '"Aston Villa"' },
   { key: "atletico_madrid", name: "Atletico Madrid",  league: "LaLiga",         searchTerms: '"Atletico Madrid" OR "Atletico de Madrid"' },
   { key: "lorient",         name: "FC Lorient",       league: "Ligue 1 FRA",    searchTerms: '"FC Lorient" OR "Lorient"' },
 ];
 
-const BLOB_PATHNAME  = "veille/latest.json";
-const MISTRAL_MODEL  = "mistral-large-latest";
-const MAX_HEADLINES  = 15;
+// Map de normalisation pour les noms football-data.co.uk -> noms searchables
+const TEAM_NAME_OVERRIDES = {
+  "Ath Madrid":    { searchName: "Atletico Madrid", searchTerms: '"Atletico Madrid" OR "Atletico de Madrid"' },
+  "Ath Bilbao":    { searchName: "Athletic Bilbao", searchTerms: '"Athletic Bilbao" OR "Athletic Club"' },
+  "Nott'm Forest": { searchName: "Nottingham Forest", searchTerms: '"Nottingham Forest"' },
+  "Man United":    { searchName: "Manchester United", searchTerms: '"Manchester United"' },
+  "Man City":      { searchName: "Manchester City",   searchTerms: '"Manchester City"' },
+  "Sociedad":      { searchName: "Real Sociedad",     searchTerms: '"Real Sociedad"' },
+};
+
+const BLOB_PATHNAME       = "veille/latest.json";
+const BLOB_TEAMS_PATHNAME = "veille/teams.json";
+const MISTRAL_MODEL       = "mistral-large-latest";
+const MAX_HEADLINES       = 15;
+
+// Selection top N = 4
+const ROTATION_TOP_N       = 4;
+const ROTATION_TOP_POOL    = 10;
+const ROTATION_MIN_ROI3Y   = 40;
+const ROTATION_SEASONS_3Y  = ["2324", "2425", "2526"];
 
 function decodeXmlEntities(s) {
   return String(s)
@@ -181,6 +199,133 @@ function mergeEvents(oldEvents = [], newEvents = []) {
   return dedupEvents([...oldEvents, ...newEvents]);
 }
 
+// ============================================================
+// Rotation hebdomadaire (dimanche UTC) — selection auto top 4
+// ============================================================
+
+function teamKey(name) {
+  return String(name).toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
+
+// Calcule ROI 3y agrégé V+O2.5 à partir du perSeason de team-rankings
+// ROI 3y = (somme des profits 23-24, 24-25, 25-26) / (somme des stakes) * 100
+function computeRoi3y(market) {
+  let totalN = 0;
+  let totalProfit = 0;
+  let seasonsWithData = 0;
+  for (const s of ROTATION_SEASONS_3Y) {
+    const ps = market?.perSeason?.[s];
+    if (!ps || !ps.n || ps.n === 0) continue;
+    totalN += ps.n;
+    totalProfit += ps.n * (ps.roi / 100); // mise plate 1€/match
+    seasonsWithData++;
+  }
+  if (totalN === 0 || seasonsWithData === 0) return null;
+  return { roi3y: (totalProfit / totalN) * 100, n3y: totalN, seasonsWithData };
+}
+
+// Selectionne les top 4 equipes Elite par ROI 3y V+O2.5, seuil >= +40%
+async function selectTopTeams() {
+  const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || "value-bet-pro.vercel.app";
+  const r = await fetch(`https://${baseUrl}/api/team-rankings`);
+  if (!r.ok) throw new Error(`team-rankings ${r.status}`);
+  const data = await r.json();
+
+  const candidates = [];
+  for (const t of data.teams || []) {
+    if (!t.isElite) continue;
+    const calc = computeRoi3y(t.markets?.win_over25);
+    if (!calc) continue;
+    if (calc.seasonsWithData < 2) continue; // exiger au moins 2 saisons avec data
+    candidates.push({
+      teamName: t.team,
+      leagueName: t.leagueName,
+      roi3y: +calc.roi3y.toFixed(2),
+      n3y: calc.n3y,
+      seasonsWithData: calc.seasonsWithData,
+    });
+  }
+
+  // Top pool puis filtre seuil puis top N final
+  candidates.sort((a, b) => b.roi3y - a.roi3y);
+  const pool = candidates.slice(0, ROTATION_TOP_POOL);
+  const qualifying = pool.filter(c => c.roi3y >= ROTATION_MIN_ROI3Y);
+  const top = qualifying.slice(0, ROTATION_TOP_N);
+
+  return top.map(c => {
+    const ov = TEAM_NAME_OVERRIDES[c.teamName];
+    const searchName = ov?.searchName || c.teamName;
+    const searchTerms = ov?.searchTerms || `"${searchName}"`;
+    return {
+      key: teamKey(searchName),
+      name: searchName,
+      league: c.leagueName,
+      searchTerms,
+      _meta: { roi3y: c.roi3y, n3y: c.n3y, seasonsWithData: c.seasonsWithData, originalCsvName: c.teamName },
+    };
+  });
+}
+
+async function loadTeamsList() {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) return null;
+  try {
+    const r = await list({ prefix: BLOB_TEAMS_PATHNAME, token });
+    const found = r.blobs?.find(b => b.pathname === BLOB_TEAMS_PATHNAME);
+    if (!found) return null;
+    const fetched = await fetch(found.url);
+    if (!fetched.ok) return null;
+    return await fetched.json();
+  } catch {
+    return null;
+  }
+}
+
+async function saveTeamsList(payload) {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) throw new Error("BLOB_READ_WRITE_TOKEN non configure");
+  await put(BLOB_TEAMS_PATHNAME, JSON.stringify(payload, null, 2), {
+    access: "public",
+    contentType: "application/json",
+    token,
+    addRandomSuffix: false,
+    allowOverwrite: true,
+  });
+}
+
+// Determine la liste active : rotation dimanche, sinon liste persistee, sinon fallback
+async function getActiveTeams() {
+  const now = new Date();
+  const isSunday = now.getUTCDay() === 0;
+  let rotationInfo = null;
+
+  if (isSunday) {
+    try {
+      const fresh = await selectTopTeams();
+      if (fresh.length > 0) {
+        const payload = {
+          teams: fresh,
+          selectedAt: now.toISOString(),
+          criteria: `ROI 3y V+O2.5 Elite, top ${ROTATION_TOP_POOL} -> seuil ${ROTATION_MIN_ROI3Y}% -> top ${ROTATION_TOP_N}`,
+        };
+        await saveTeamsList(payload);
+        return { teams: fresh, info: { source: "rotation_today", ...payload } };
+      }
+      rotationInfo = { source: "rotation_kept_previous", reason: "0 equipe au seuil +40%" };
+    } catch (e) {
+      rotationInfo = { source: "rotation_error", error: e.message };
+    }
+  }
+
+  const stored = await loadTeamsList();
+  if (stored?.teams && stored.teams.length > 0) {
+    return { teams: stored.teams, info: rotationInfo || { source: "stored", ...stored } };
+  }
+  return { teams: FALLBACK_TEAMS, info: rotationInfo || { source: "fallback_hardcoded" } };
+}
+
 export default async function handler(req, res) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
@@ -192,11 +337,12 @@ export default async function handler(req, res) {
   }
 
   try {
+    const { teams: TEAMS, info: rotationInfo } = await getActiveTeams();
     const existing = (await loadExistingStore()) || { teams: {} };
     const teamsOut = {};
     const errors   = [];
 
-    // Traitement des 3 equipes en parallele pour rester sous maxDuration
+    // Traitement des equipes actives en parallele pour rester sous maxDuration
     const results = await Promise.all(TEAMS.map(async (team) => {
       try {
         const headlines = await fetchGoogleNewsRss(team);
@@ -240,11 +386,12 @@ export default async function handler(req, res) {
     const store = {
       lastUpdate: new Date().toISOString(),
       version_matrix: "1.0",
+      rotation: rotationInfo,
       teams: teamsOut,
       errors,
     };
     await saveStore(store);
-    return res.status(200).json({ ok: true, lastUpdate: store.lastUpdate, errors });
+    return res.status(200).json({ ok: true, lastUpdate: store.lastUpdate, rotation: rotationInfo, errors });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

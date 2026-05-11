@@ -427,7 +427,10 @@
     </div>
 
     <div class="veille-header">
-      <div class="last-update" id="veille-last-update">Chargement de la veille…</div>
+      <div>
+        <div class="last-update" id="veille-last-update">Chargement de la veille…</div>
+        <div class="last-update" id="veille-rotation" style="margin-top:2px"></div>
+      </div>
       <button class="toggle-btn" id="veille-refresh" style="font-size: 11px;">🔄 Recharger</button>
     </div>
 
@@ -1166,6 +1169,29 @@ function renderVeille() {
   if (VEILLE_DATA.lastUpdate) {
     const d = new Date(VEILLE_DATA.lastUpdate);
     lastUpdateEl.textContent = 'Dernière màj : ' + d.toLocaleString('fr-FR');
+  }
+
+  // Affichage info rotation hebdo
+  const rotEl = document.getElementById('veille-rotation');
+  const rot = VEILLE_DATA.rotation;
+  if (rotEl && rot) {
+    let txt = '';
+    if (rot.source === 'rotation_today') {
+      const d = new Date(rot.selectedAt);
+      txt = `🔁 Rotation appliquée le ${d.toLocaleDateString('fr-FR')} — ${rot.criteria}`;
+    } else if (rot.source === 'stored') {
+      const d = rot.selectedAt ? new Date(rot.selectedAt) : null;
+      txt = `📌 Liste figée depuis la dernière rotation${d ? ' (' + d.toLocaleDateString('fr-FR') + ')' : ''}`;
+    } else if (rot.source === 'rotation_kept_previous') {
+      txt = `⚠️ Rotation dimanche : aucune équipe au seuil +40 %, liste précédente maintenue`;
+    } else if (rot.source === 'rotation_error') {
+      txt = `❌ Erreur rotation : ${rot.error || ''}`;
+    } else if (rot.source === 'fallback_hardcoded') {
+      txt = `🧱 Liste fallback hardcoded (rotation pas encore appliquée — attendre dimanche)`;
+    }
+    rotEl.textContent = txt;
+  } else if (rotEl) {
+    rotEl.textContent = '';
   }
 
   // Wire up override controls
