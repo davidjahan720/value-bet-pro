@@ -200,6 +200,123 @@
   }
   .market-section h3 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent-2); }
   .market-section p { margin: 0; font-size: 11px; color: var(--muted); }
+
+  /* ===== Tab navigation ===== */
+  .tab-nav { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .tab-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    color: var(--muted);
+    padding: 10px 18px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: -1px;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-color: var(--border);
+    border-bottom-color: var(--bg);
+    background: var(--panel);
+  }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ===== Veille - cartes equipe ===== */
+  .veille-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px; flex-wrap: wrap; gap: 12px;
+  }
+  .veille-header .last-update { font-size: 11px; color: var(--muted); }
+  .veille-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 16px;
+  }
+  .veille-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    border-left-width: 4px;
+  }
+  .veille-card.color-green  { border-left-color: var(--green); }
+  .veille-card.color-yellow { border-left-color: var(--gold); }
+  .veille-card.color-orange { border-left-color: var(--accent); }
+  .veille-card.color-red    { border-left-color: var(--red); }
+
+  .veille-card h3 { margin: 0 0 4px; font-size: 14px; }
+  .veille-card .league { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .veille-status {
+    margin: 12px 0; padding: 10px 12px;
+    border-radius: 6px; display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px;
+  }
+  .veille-status.color-green  { background: var(--green-bg); color: var(--green); }
+  .veille-status.color-yellow { background: rgba(240, 195, 60, 0.12); color: var(--gold); }
+  .veille-status.color-orange { background: rgba(247, 129, 102, 0.12); color: var(--accent); }
+  .veille-status.color-red    { background: var(--red-bg); color: var(--red); }
+  .veille-status .label-decision { font-weight: 700; letter-spacing: 0.5px; }
+  .veille-status .stake-line { font-size: 11px; opacity: 0.9; }
+
+  .veille-events { list-style: none; padding: 0; margin: 8px 0 0; }
+  .event-item {
+    border-top: 1px solid var(--border);
+    padding: 8px 0;
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    gap: 10px;
+    font-size: 12px;
+  }
+  .event-item:first-child { border-top: none; }
+  .event-impact {
+    font-weight: 700;
+    text-align: center;
+    padding: 2px 0;
+    border-radius: 3px;
+    height: 22px; line-height: 18px;
+    font-variant-numeric: tabular-nums;
+  }
+  .event-impact.pos { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
+  .event-impact.neg { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); }
+  .event-impact.neu { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+  .event-headline a { color: var(--text); text-decoration: none; }
+  .event-headline a:hover { color: var(--accent); text-decoration: underline; }
+  .event-meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .event-explanation { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 2px; }
+  .event-category-tag {
+    display: inline-block; padding: 1px 5px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 3px; font-size: 9px;
+    text-transform: uppercase; letter-spacing: 0.3px; margin-right: 6px;
+  }
+
+  .veille-override {
+    margin-top: 12px; padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+    font-size: 11px; color: var(--muted);
+  }
+  .veille-override select {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    padding: 4px 8px; border-radius: 4px; font-family: inherit; font-size: 11px;
+  }
+  .veille-override .override-active { color: var(--accent); font-weight: 700; }
+  .veille-override button {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 3px 8px; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 10px;
+  }
+  .veille-override button:hover { color: var(--accent); border-color: var(--accent); }
+
+  .veille-empty {
+    text-align: center; padding: 40px 20px; color: var(--muted);
+    border: 1px dashed var(--border); border-radius: 8px;
+  }
 </style>
 </head>
 <body>
@@ -218,6 +335,13 @@
       <span class="badge purple" id="quota-badge">Odds API : —</span>
     </div>
   </header>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="classement">📊 Classement multi-marchés</button>
+    <button class="tab-btn" data-tab="veille">🔔 Veille événementielle</button>
+  </nav>
+
+  <div id="tab-classement" class="tab-content active">
 
   <div class="market-section">
     <h3>💡 Marché phare détecté : « Victoire + Over 2.5 »</h3>
@@ -291,6 +415,40 @@
       Mise à jour automatique toutes les 6 heures.
     </p>
   </div>
+
+  </div><!-- /tab-classement -->
+
+  <div id="tab-veille" class="tab-content">
+    <div class="market-section" style="border-left-color: var(--green)">
+      <h3 style="color: var(--green)">🔔 Veille événementielle quotidienne — Tier A (Aston Villa, Atlético Madrid, Lorient)</h3>
+      <p>Cron quotidien 7h UTC : recherche Google News (24h) → catégorisation Mistral → scoring d'impact V+O2.5 → décision automatique (GO PLEIN / RÉDUIT / MINIMUM / SKIP). Persistance d'events actifs avec expiration intelligente.</p>
+    </div>
+
+    <div class="veille-header">
+      <div class="last-update" id="veille-last-update">Chargement de la veille…</div>
+      <button class="toggle-btn" id="veille-refresh" style="font-size: 11px;">🔄 Recharger</button>
+    </div>
+
+    <div id="veille-content">
+      <div class="loading">
+        Lecture du store de veille…
+        <div class="loading-bar"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>
+        <strong>Méthodologie veille :</strong> chaque event est pondéré par sa catégorie (blessure attaquant titulaire −2, transfert sortant buteur −3, etc.). Score cumulé sur events actifs (non expirés). Override manuel disponible et persisté en localStorage.
+      </p>
+      <p>
+        <strong>Seuils décision :</strong> ≥+1 GO BOOST 1.5€ · 0 à −1 GO PLEIN 1€ · −2 à −3 RÉDUIT 0.5€ · −4 à −5 MINIMUM 0.2€ · ≤−6 SKIP 0€
+      </p>
+      <p>
+        Sources actu : Google News RSS (fr-FR, 24h glissantes) · catégorisation IA : Mistral mistral-small-latest · stockage : Vercel Blob.
+      </p>
+    </div>
+  </div><!-- /tab-veille -->
+
 </div>
 
 <script>
@@ -852,6 +1010,201 @@ document.getElementById('searchTeam').addEventListener('input', e => { CURRENT_S
 document.getElementById('sortBy').addEventListener('change', e => { SORT_BY = e.target.value; render(); });
 
 loadData();
+
+// ====================================================================
+// Tab switching + Veille evenementielle
+// ====================================================================
+
+const DECISION_OPTIONS = [
+  { value: 'AUTO',     label: 'Auto (recommandation)' },
+  { value: 'GO_BOOST', label: 'GO BOOST (1.50 €)' },
+  { value: 'GO_FULL',  label: 'GO PLEIN (1.00 €)' },
+  { value: 'REDUCED',  label: 'RÉDUIT (0.50 €)' },
+  { value: 'MINIMUM',  label: 'MINIMUM (0.20 €)' },
+  { value: 'SKIP',     label: 'SKIP (0 €)' },
+];
+
+const DECISION_INFO = {
+  GO_BOOST: { stake: 1.5, color: 'green',  label: 'GO BOOST' },
+  GO_FULL:  { stake: 1.0, color: 'green',  label: 'GO PLEIN' },
+  REDUCED:  { stake: 0.5, color: 'yellow', label: 'RÉDUIT' },
+  MINIMUM:  { stake: 0.2, color: 'orange', label: 'MINIMUM' },
+  SKIP:     { stake: 0,   color: 'red',    label: 'SKIP' },
+};
+
+let VEILLE_DATA = null;
+let VEILLE_LOADED = false;
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function fmtImpact(v) {
+  if (v > 0) return { cls: 'pos', text: '+' + v };
+  if (v < 0) return { cls: 'neg', text: String(v) };
+  return { cls: 'neu', text: '0' };
+}
+
+function fmtDateFr(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+  } catch { return ''; }
+}
+
+function getOverride(teamKey) {
+  try { return localStorage.getItem('veille_override_' + teamKey) || 'AUTO'; }
+  catch { return 'AUTO'; }
+}
+function setOverride(teamKey, value) {
+  try {
+    if (value === 'AUTO') localStorage.removeItem('veille_override_' + teamKey);
+    else localStorage.setItem('veille_override_' + teamKey, value);
+  } catch {}
+}
+
+function renderVeilleCard(key, team) {
+  const override = getOverride(key);
+  const auto = { decision: team.decision, stake: team.stake_recommended_eur, color: team.color, label: team.label };
+  const eff = override === 'AUTO' ? auto : DECISION_INFO[override];
+  const isOverridden = override !== 'AUTO';
+
+  const events = (team.activeEvents || team.events || []).slice().sort((a, b) => {
+    return (Math.abs(b.impact || 0) - Math.abs(a.impact || 0));
+  });
+
+  const eventsHtml = events.length === 0
+    ? '<div style="padding:12px 0;color:var(--muted);font-size:12px;font-style:italic">Aucun événement actif détecté ces derniers jours.</div>'
+    : events.map(ev => {
+        const imp = fmtImpact(ev.impact);
+        const headlineHtml = ev.url
+          ? `<a href="${escapeHtml(ev.url)}" target="_blank" rel="noopener">${escapeHtml(ev.headline)}</a>`
+          : escapeHtml(ev.headline);
+        return `
+          <li class="event-item">
+            <div class="event-impact ${imp.cls}">${imp.text}</div>
+            <div>
+              <div class="event-headline">${headlineHtml}</div>
+              <div class="event-meta">
+                <span class="event-category-tag">${escapeHtml(ev.category || 'other')}</span>
+                <span>${escapeHtml(ev.source || '—')} · ${fmtDateFr(ev.date || ev.ingested_at)}</span>
+              </div>
+              ${ev.explanation ? `<div class="event-explanation">${escapeHtml(ev.explanation)}</div>` : ''}
+            </div>
+          </li>`;
+      }).join('');
+
+  const overrideSelect = DECISION_OPTIONS.map(o =>
+    `<option value="${o.value}"${o.value === override ? ' selected' : ''}>${escapeHtml(o.label)}</option>`
+  ).join('');
+
+  return `
+    <div class="veille-card color-${eff.color}">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:12px">
+        <div>
+          <h3>${escapeHtml(team.name)}</h3>
+          <div class="league">${escapeHtml(team.league)}</div>
+        </div>
+        <div style="text-align:right;font-size:11px;color:var(--muted)">
+          Score : <strong style="color:${team.score < 0 ? 'var(--red)' : (team.score > 0 ? 'var(--green)' : 'var(--text)')}">${team.score > 0 ? '+' : ''}${team.score}</strong>
+        </div>
+      </div>
+
+      <div class="veille-status color-${eff.color}">
+        <div>
+          <div class="label-decision">${eff.label}${isOverridden ? ' (override)' : ''}</div>
+          <div class="stake-line">Mise recommandée : <strong>${eff.stake.toFixed(2)} €</strong> par match domicile</div>
+        </div>
+        <div style="font-size:24px">
+          ${eff.color === 'green' ? '🟢' : eff.color === 'yellow' ? '🟡' : eff.color === 'orange' ? '🟠' : '🔴'}
+        </div>
+      </div>
+
+      <ul class="veille-events">${eventsHtml}</ul>
+
+      <div class="veille-override">
+        <span>Override :</span>
+        <select data-team="${escapeHtml(key)}" class="veille-override-select">${overrideSelect}</select>
+        ${isOverridden ? '<span class="override-active">● actif</span>' : ''}
+        ${isOverridden ? `<button data-team="${escapeHtml(key)}" class="veille-override-reset">Réinitialiser</button>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderVeille() {
+  const container = document.getElementById('veille-content');
+  const lastUpdateEl = document.getElementById('veille-last-update');
+
+  if (!VEILLE_DATA) {
+    container.innerHTML = '<div class="veille-empty">Veille indisponible. Vérifiez que le cron a tourné au moins une fois et que les secrets Vercel sont configurés.</div>';
+    lastUpdateEl.textContent = '—';
+    return;
+  }
+
+  if (VEILLE_DATA.warning) {
+    container.innerHTML = `<div class="veille-empty">${escapeHtml(VEILLE_DATA.warning)}</div>`;
+    lastUpdateEl.textContent = '—';
+    return;
+  }
+
+  const teamsObj = VEILLE_DATA.teams || {};
+  const teamKeys = Object.keys(teamsObj);
+
+  if (teamKeys.length === 0) {
+    container.innerHTML = '<div class="veille-empty">Aucune équipe dans le store. Le cron n\'a pas encore tourné ou a planté.</div>';
+    return;
+  }
+
+  const cards = teamKeys.map(k => renderVeilleCard(k, teamsObj[k])).join('');
+  container.innerHTML = `<div class="veille-grid">${cards}</div>`;
+
+  if (VEILLE_DATA.lastUpdate) {
+    const d = new Date(VEILLE_DATA.lastUpdate);
+    lastUpdateEl.textContent = 'Dernière màj : ' + d.toLocaleString('fr-FR');
+  }
+
+  // Wire up override controls
+  container.querySelectorAll('.veille-override-select').forEach(sel => {
+    sel.addEventListener('change', e => {
+      setOverride(e.target.dataset.team, e.target.value);
+      renderVeille();
+    });
+  });
+  container.querySelectorAll('.veille-override-reset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setOverride(btn.dataset.team, 'AUTO');
+      renderVeille();
+    });
+  });
+}
+
+async function loadVeille(force = false) {
+  if (VEILLE_LOADED && !force) return;
+  const container = document.getElementById('veille-content');
+  container.innerHTML = '<div class="loading">Lecture du store de veille…<div class="loading-bar"></div></div>';
+  try {
+    const r = await fetch('/api/veille-get', { cache: force ? 'no-store' : 'default' });
+    VEILLE_DATA = await r.json();
+    VEILLE_LOADED = true;
+    renderVeille();
+  } catch (e) {
+    container.innerHTML = `<div class="veille-empty">Erreur de chargement : ${escapeHtml(e.message || e)}</div>`;
+  }
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-content').forEach(c => {
+      c.classList.toggle('active', c.id === 'tab-' + tab);
+    });
+    if (tab === 'veille') loadVeille();
+  });
+});
+
+document.getElementById('veille-refresh').addEventListener('click', () => loadVeille(true));
 </script>
 </body>
 </html>

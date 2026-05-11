@@ -14,6 +14,18 @@
     },
     "api/bet-log.js": {
       "maxDuration": 30
+    },
+    "api/veille-cron.js": {
+      "maxDuration": 60
+    },
+    "api/veille-get.js": {
+      "maxDuration": 10
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/veille-cron",
+      "schedule": "0 7 * * *"
+    }
+  ]
 }

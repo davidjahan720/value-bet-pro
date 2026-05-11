@@ -1,0 +1,10 @@
+{
+  "name": "value-bet-pro",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Veille bet pro - analyse ROI multi-marches + veille evenementielle quotidienne",
+  "dependencies": {
+    "@vercel/blob": "^0.27.0"
+  }
+}
