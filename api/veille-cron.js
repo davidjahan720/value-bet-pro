@@ -40,6 +40,16 @@ const ROTATION_TOP_POOL    = 10;
 const ROTATION_MIN_ROI3Y   = 40;
 const ROTATION_SEASONS_3Y  = ["2324", "2425", "2526"];
 
+// Equipes promues en division superieure pour la saison 26-27.
+// Leur ROI 3y est base sur D2 et n'est pas transposable a D1 (cf. proxies Mallorca/Alaves +5% moyen vs +40% en Segunda).
+// Re-eligibilite automatique a partir de 27-28 quand elles auront des donnees D1 dans le backtest 3y.
+// Liste a mettre a jour chaque inter-saison.
+const PROMOTED_EXCLUSION_2627 = new Set([
+  "Santander",   // Promu Segunda ESP -> LaLiga (champion 25-26)
+  "Coventry",    // Promu Championship ENG -> Premier League (champion 25-26)
+  // Almeria, Las Palmas, Burgos, Eibar : statut barrages a confirmer
+]);
+
 function decodeXmlEntities(s) {
   return String(s)
     .replace(/<!\[CDATA\[|\]\]>/g, "")
@@ -234,8 +244,13 @@ async function selectTopTeams() {
   const data = await r.json();
 
   const candidates = [];
+  const excludedPromoted = [];
   for (const t of data.teams || []) {
     if (!t.isElite) continue;
+    if (PROMOTED_EXCLUSION_2627.has(t.team)) {
+      excludedPromoted.push(t.team);
+      continue;
+    }
     const calc = computeRoi3y(t.markets?.win_over25);
     if (!calc) continue;
     if (calc.seasonsWithData < 2) continue; // exiger au moins 2 saisons avec data
@@ -254,7 +269,7 @@ async function selectTopTeams() {
   const qualifying = pool.filter(c => c.roi3y >= ROTATION_MIN_ROI3Y);
   const top = qualifying.slice(0, ROTATION_TOP_N);
 
-  return top.map(c => {
+  const selected = top.map(c => {
     const ov = TEAM_NAME_OVERRIDES[c.teamName];
     const searchName = ov?.searchName || c.teamName;
     const searchTerms = ov?.searchTerms || `"${searchName}"`;
@@ -266,6 +281,8 @@ async function selectTopTeams() {
       _meta: { roi3y: c.roi3y, n3y: c.n3y, seasonsWithData: c.seasonsWithData, originalCsvName: c.teamName },
     };
   });
+  selected._excludedPromoted = excludedPromoted;
+  return selected;
 }
 
 async function loadTeamsList() {
@@ -309,6 +326,7 @@ async function getActiveTeams() {
           teams: fresh,
           selectedAt: now.toISOString(),
           criteria: `ROI 3y V+O2.5 Elite, top ${ROTATION_TOP_POOL} -> seuil ${ROTATION_MIN_ROI3Y}% -> top ${ROTATION_TOP_N}`,
+          excludedPromoted: fresh._excludedPromoted || [],
         };
         await saveTeamsList(payload);
         return { teams: fresh, info: { source: "rotation_today", ...payload } };
