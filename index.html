@@ -275,6 +275,8 @@
     font-size: 12px;
   }
   .event-item:first-child { border-top: none; }
+  .event-item.not-counted { opacity: 0.45; }
+  .event-item.not-counted .event-impact { background: var(--panel-2); color: var(--muted); border-color: var(--border); text-decoration: line-through; }
   .event-impact {
     font-weight: 700;
     text-align: center;
@@ -1081,14 +1083,16 @@ function renderVeilleCard(key, team) {
         const headlineHtml = ev.url
           ? `<a href="${escapeHtml(ev.url)}" target="_blank" rel="noopener">${escapeHtml(ev.headline)}</a>`
           : escapeHtml(ev.headline);
+        const notCounted = (ev._counted === false);
         return `
-          <li class="event-item">
+          <li class="event-item${notCounted ? ' not-counted' : ''}" title="${notCounted ? 'Doublon de catégorie unique - non compté dans le score' : ''}">
             <div class="event-impact ${imp.cls}">${imp.text}</div>
             <div>
               <div class="event-headline">${headlineHtml}</div>
               <div class="event-meta">
                 <span class="event-category-tag">${escapeHtml(ev.category || 'other')}</span>
                 <span>${escapeHtml(ev.source || '—')} · ${fmtDateFr(ev.date || ev.ingested_at)}</span>
+                ${notCounted ? '<span style="color:var(--muted);margin-left:6px">· doublon ignoré</span>' : ''}
               </div>
               ${ev.explanation ? `<div class="event-explanation">${escapeHtml(ev.explanation)}</div>` : ''}
             </div>

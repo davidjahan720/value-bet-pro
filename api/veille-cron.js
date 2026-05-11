@@ -78,24 +78,25 @@ Categories disponibles :
 ${categoriesList}
 
 Regles strictes :
-1. Pour CHAQUE titre, decide s'il est PERTINENT pour la performance V+O2.5 a domicile. Si non pertinent (resultat anodin, rumeur sans nom, info commerciale), IGNORE-le.
-2. Retourne UNIQUEMENT un JSON valide au format ci-dessous. AUCUN texte autour.
-3. Si aucun titre n'est pertinent, retourne {"events": []}.
-4. "impact" est un entier dans [-3, 3]. Override le default uniquement si le contexte le justifie (ex: depart de la star vs un remplacant).
-5. "expires_days" : duree de validite estimee en jours (1 a 365). Pour une blessure, estime la duree d'indisponibilite.
+1. REGROUPEMENT DES STORIES : si plusieurs titres decrivent le MEME evenement reel (ex: 9 articles sur le depart d'un coach, 3 articles sur la meme blessure), tu DOIS emettre UN SEUL event qui represente cet evenement. Ne dupplique JAMAIS. Choisis le titre/url/source qui resume le mieux, et mets dans l'explanation le nombre de sources qui confirment l'event entre parentheses ("(confirme par N sources)").
+2. PERTINENCE : pour chaque titre, decide s'il est pertinent pour la performance V+O2.5 a domicile. Si non pertinent (resultat anodin, rumeur sans nom, info commerciale, transfert non confirme, reaction de fan sans lien direct), IGNORE-le.
+3. Retourne UNIQUEMENT un JSON valide au format ci-dessous. AUCUN texte autour.
+4. Si aucun titre n'est pertinent, retourne {"events": []}.
+5. "impact" est un entier dans [-3, 3]. Override le default uniquement si le contexte le justifie (ex: depart de LA star vs un joueur secondaire).
+6. "expires_days" : duree de validite estimee en jours (1 a 365). Pour une blessure, estime la duree d'indisponibilite. Pour un changement de coach, 30 jours.
 
 Format JSON attendu :
 {
   "events": [
     {
-      "headline": "<titre exact>",
-      "url": "<url source>",
-      "source": "<nom source>",
+      "headline": "<titre exact - choisi parmi les sources>",
+      "url": "<url de la source la plus officielle>",
+      "source": "<nom de cette source>",
       "pubDate": "<pubDate fournie>",
       "category": "<cle exacte de la liste>",
       "impact": <int -3 a 3>,
       "expires_days": <int 1 a 365>,
-      "explanation": "<une phrase max 150 chars sur le pourquoi de l'impact V+O2.5>"
+      "explanation": "<une phrase max 150 chars sur le pourquoi de l'impact V+O2.5 (ajouter '(confirme par N sources)' si plusieurs titres decrivent le meme event)>"
     }
   ]
 }
