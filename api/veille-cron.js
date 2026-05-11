@@ -1,5 +1,7 @@
 // Vercel Serverless Function - Cron quotidien de veille evenementielle
-// Schedule : "0 7 * * *" (07h00 UTC chaque jour)
+// Schedule : "0 21 * * *" (21h00 UTC chaque jour = 23h Paris en ete, 22h Paris en hiver
+//            -> apres les matchs du dimanche apres-midi)
+// Le dimanche UTC, on declenche aussi la rotation hebdo de la liste d'equipes.
 // Protege par CRON_SECRET (Vercel envoie automatiquement Authorization: Bearer <secret>)
 //
 // Pipeline :
