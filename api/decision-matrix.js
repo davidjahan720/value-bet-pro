@@ -117,3 +117,38 @@ export function defaultExpiresAt(category, baseDate = new Date()) {
   d.setDate(d.getDate() + cat.defaultDurationDays);
   return d.toISOString();
 }
+
+// Normalise un titre pour la dedup par contenu :
+// - lowercase
+// - retire ponctuation/accents/guillemets
+// - collapse espaces multiples
+// Permet de matcher "Departed coach!" et "departed coach" comme equivalents.
+export function normalizeHeadline(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")     // strip diacritiques
+    .replace(/['"…«»–—\-_:;,.!?()/\[\]]/g, " ")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Dedup robuste : un event est considere doublon s'il partage soit l'URL,
+// soit le titre normalise (>= 10 chars) avec un event deja vu.
+// L'ordre est preserve (premier event = source de verite).
+export function dedupEvents(events) {
+  const seenUrl = new Set();
+  const seenHl  = new Set();
+  const out = [];
+  for (const ev of events || []) {
+    const urlKey = (ev.url && ev.url.length > 5) ? ev.url : null;
+    const hl     = normalizeHeadline(ev.headline);
+    const hKey   = hl.length >= 10 ? hl : null;
+    if (urlKey && seenUrl.has(urlKey)) continue;
+    if (hKey   && seenHl.has(hKey))    continue;
+    if (urlKey) seenUrl.add(urlKey);
+    if (hKey)   seenHl.add(hKey);
+    out.push(ev);
+  }
+  return out;
+}

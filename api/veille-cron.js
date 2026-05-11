@@ -10,7 +10,7 @@
 //   5. Persiste dans veille/latest.json (Vercel Blob)
 
 import { put, list } from "@vercel/blob";
-import { CATEGORIES, computeDecision } from "./decision-matrix.js";
+import { CATEGORIES, computeDecision, dedupEvents } from "./decision-matrix.js";
 
 const TEAMS = [
   { key: "aston_villa",     name: "Aston Villa",      league: "Premier League", searchTerms: '"Aston Villa"' },
@@ -175,13 +175,10 @@ async function saveStore(store) {
   });
 }
 
+// Fusionne old + new events en appliquant la dedup robuste de decision-matrix.js
+// (URL + titre normalise). Conserve l'ordre : anciens d'abord, nouveaux apres.
 function mergeEvents(oldEvents = [], newEvents = []) {
-  const seen = new Map();
-  for (const ev of [...oldEvents, ...newEvents]) {
-    const key = (ev.url && ev.url.length > 5) ? ev.url : ev.headline;
-    if (!seen.has(key)) seen.set(key, ev);
-  }
-  return Array.from(seen.values());
+  return dedupEvents([...oldEvents, ...newEvents]);
 }
 
 export default async function handler(req, res) {

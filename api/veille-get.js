@@ -3,7 +3,7 @@
 // Recalcule la decision a la volee (au cas ou des events ont expire depuis la derniere ecriture)
 
 import { list } from "@vercel/blob";
-import { computeDecision } from "./decision-matrix.js";
+import { computeDecision, dedupEvents } from "./decision-matrix.js";
 
 const BLOB_PATHNAME = "veille/latest.json";
 
@@ -34,10 +34,13 @@ export default async function handler(req, res) {
     }
     const store = await fetched.json();
 
-    // Recalcule live des decisions (au cas ou des events ont expire depuis l'ecriture)
+    // Recalcule live des decisions + dedup robuste (URL + titre normalise)
+    // pour nettoyer les eventuels doublons hérités d'anciens runs
     const nowIso = new Date().toISOString();
     for (const [k, t] of Object.entries(store.teams || {})) {
-      const d = computeDecision(t.events || [], nowIso);
+      const deduped = dedupEvents(t.events || []);
+      const d = computeDecision(deduped, nowIso);
+      t.events = deduped;
       t.score = d.score;
       t.decision = d.decision;
       t.stake_recommended_eur = d.stake_recommended_eur;
