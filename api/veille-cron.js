@@ -19,7 +19,7 @@ const TEAMS = [
 ];
 
 const BLOB_PATHNAME  = "veille/latest.json";
-const MISTRAL_MODEL  = "mistral-small-latest";
+const MISTRAL_MODEL  = "mistral-large-latest";
 const MAX_HEADLINES  = 15;
 
 function decodeXmlEntities(s) {

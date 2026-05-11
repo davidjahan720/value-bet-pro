@@ -53,7 +53,7 @@ Onglet « 🔔 Veille » de l'app : surveille **3 équipes du Tier A** (Aston Vi
 
 1. **Cron Vercel** quotidien à 07h00 UTC → `/api/veille-cron`
 2. Pour chaque équipe : fetch **Google News RSS** (24h glissantes, fr-FR)
-3. Envoi des titres à **Mistral** (`mistral-small-latest`) pour catégorisation + scoring
+3. Envoi des titres à **Mistral** (`mistral-large-latest`) pour catégorisation + scoring
 4. Fusion avec store existant (déduplication par URL) — **events persistent jusqu'à expiration** (durée par catégorie, ex: blessure 21 jours)
 5. Calcul score cumulé + décision via `decision-matrix.js`
 6. Persistance dans **Vercel Blob** (`veille/latest.json`)
@@ -98,7 +98,7 @@ Voir `.env.example`.
 
 ### Coût estimé
 
-~1.5 €/mois (Mistral 30 runs × 3 équipes, web RSS gratuit, Blob/cron gratuits sur Hobby).
+~0.80 €/mois (Mistral large 30 runs × 3 équipes, web RSS gratuit, Blob/cron gratuits sur Hobby).
 
 ## Critères de filtrage (figés dans `api/team-rankings.js`)
 
