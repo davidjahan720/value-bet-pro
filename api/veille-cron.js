@@ -36,9 +36,10 @@ const BLOB_TEAMS_PATHNAME = "veille/teams.json";
 const MISTRAL_MODEL       = "mistral-large-latest";
 const MAX_HEADLINES       = 15;
 
-// Selection : top 5 Elite par ROI 3y (sans seuil minimum sur les derniers du top)
-const ROTATION_TOP_N       = 5;
+// Selection : top 4 Elite par ROI 3y (sans seuil minimum sur les derniers du top)
+const ROTATION_TOP_N       = 4;
 const ROTATION_SEASONS_3Y  = ["2324", "2425", "2526"];
+const BLOB_WATCHLIST_PATH  = "veille/watchlist.json";
 
 // Equipes promues en division superieure pour la saison 26-27.
 // Leur ROI 3y est base sur D2 et n'est pas transposable a D1 (cf. proxies Mallorca/Alaves +5% moyen vs +40% en Segunda).
@@ -310,10 +311,43 @@ async function saveTeamsList(payload) {
   });
 }
 
-// Determine la liste active : rotation dimanche, sinon liste persistee, sinon fallback
+// Charge la watchlist serveur (alimentee par /api/watchlist-sync depuis le frontend)
+// et la convertit au format TEAMS.
+async function loadWatchlistTeams() {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) return [];
+  try {
+    const r = await list({ prefix: BLOB_WATCHLIST_PATH, token });
+    const found = r.blobs?.find(b => b.pathname === BLOB_WATCHLIST_PATH);
+    if (!found) return [];
+    const fetched = await fetch(found.url);
+    if (!fetched.ok) return [];
+    const data = await fetched.json();
+    const keys = Array.isArray(data?.keys) ? data.keys : [];
+    return keys.map(k => {
+      const [teamName, league] = k.split("|");
+      if (!teamName) return null;
+      const ov = TEAM_NAME_OVERRIDES[teamName];
+      const searchName = ov?.searchName || teamName;
+      return {
+        key: teamKey(searchName),
+        name: searchName,
+        league: league || "",
+        searchTerms: ov?.searchTerms || `"${searchName}"`,
+        _source: "watchlist",
+      };
+    }).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+// Determine la liste active : rotation top 4 + watchlist (union dedupliquee).
+// Rotation refresh le dimanche, sinon liste persistee. Watchlist toujours fresh.
 async function getActiveTeams() {
   const now = new Date();
   const isSunday = now.getUTCDay() === 0;
+  let rotationTeams = null;
   let rotationInfo = null;
 
   if (isSunday) {
@@ -327,19 +361,48 @@ async function getActiveTeams() {
           excludedPromoted: fresh._excludedPromoted || [],
         };
         await saveTeamsList(payload);
-        return { teams: fresh, info: { source: "rotation_today", ...payload } };
+        rotationTeams = fresh;
+        rotationInfo = { source: "rotation_today", ...payload };
+      } else {
+        rotationInfo = { source: "rotation_kept_previous", reason: "Aucun candidat Elite avec >= 2 saisons de donnees" };
       }
-      rotationInfo = { source: "rotation_kept_previous", reason: "Aucun candidat Elite avec >= 2 saisons de donnees" };
     } catch (e) {
       rotationInfo = { source: "rotation_error", error: e.message };
     }
   }
 
-  const stored = await loadTeamsList();
-  if (stored?.teams && stored.teams.length > 0) {
-    return { teams: stored.teams, info: rotationInfo || { source: "stored", ...stored } };
+  if (!rotationTeams) {
+    const stored = await loadTeamsList();
+    if (stored?.teams && stored.teams.length > 0) {
+      rotationTeams = stored.teams;
+      if (!rotationInfo) rotationInfo = { source: "stored", ...stored };
+    } else {
+      rotationTeams = FALLBACK_TEAMS;
+      if (!rotationInfo) rotationInfo = { source: "fallback_hardcoded" };
+    }
   }
-  return { teams: FALLBACK_TEAMS, info: rotationInfo || { source: "fallback_hardcoded" } };
+
+  // Union avec la watchlist (dedup par key)
+  const watchlistTeams = await loadWatchlistTeams();
+  const seen = new Set(rotationTeams.map(t => t.key));
+  const watchlistAdded = [];
+  for (const wt of watchlistTeams) {
+    if (!seen.has(wt.key)) {
+      seen.add(wt.key);
+      watchlistAdded.push(wt);
+    }
+  }
+
+  const allTeams = [...rotationTeams, ...watchlistAdded];
+  return {
+    teams: allTeams,
+    info: {
+      ...rotationInfo,
+      rotationCount: rotationTeams.length,
+      watchlistCount: watchlistTeams.length,
+      watchlistAdded: watchlistAdded.length,
+    },
+  };
 }
 
 export default async function handler(req, res) {

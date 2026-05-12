@@ -560,8 +560,8 @@
 
   <div id="tab-veille" class="tab-content">
     <div class="market-section" style="border-left-color: var(--green)">
-      <h3 style="color: var(--green)">🔔 Veille événementielle quotidienne — top 5 V+O2.5 ROI 3y</h3>
-      <p>Cron quotidien 21h UTC (= 23h Paris en été) : recherche Google News (24h) → catégorisation Mistral → scoring d'impact V+O2.5 → décision auto (GO PLEIN / RÉDUIT / MINIMUM / SKIP). Rotation hebdo le dimanche : sélection auto des 5 meilleures Élite par ROI 3y agrégé (23-24 + 24-25 + 25-26).</p>
+      <h3 style="color: var(--green)">🔔 Veille événementielle quotidienne — top 4 V+O2.5 ROI 3y + watchlist</h3>
+      <p>Cron quotidien 21h UTC (= 23h Paris en été) : recherche Google News (24h) → catégorisation Mistral → scoring d'impact V+O2.5 → décision auto (GO PLEIN / RÉDUIT / MINIMUM / SKIP). Rotation hebdo le dimanche : top 4 Élite par ROI 3y agrégé. + toutes les équipes étoilées dans ta watchlist (union dédupliquée).</p>
     </div>
 
     <div class="veille-header">
@@ -611,7 +611,8 @@ let SORT_BY = 'win_over25';
 let SORT_DIR = -1;
 
 // ============================================================
-// Watchlist (persistee en localStorage, key = team|league_code)
+// Watchlist (persistee en localStorage + sync vers Vercel Blob
+// pour que le cron veille puisse l'inclure dans son monitoring)
 // ============================================================
 const WATCHLIST = (() => {
   try { return new Set(JSON.parse(localStorage.getItem('vbp_watchlist') || '[]')); }
@@ -620,11 +621,41 @@ const WATCHLIST = (() => {
 function teamWatchKey(t) { return `${t.team}|${t.league}`; }
 function saveWatchlist() {
   try { localStorage.setItem('vbp_watchlist', JSON.stringify(Array.from(WATCHLIST))); } catch {}
+  // Sync vers le serveur (best-effort, non bloquant)
+  syncWatchlistToServer();
+}
+let _syncTimer = null;
+function syncWatchlistToServer() {
+  if (_syncTimer) clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(() => {
+    fetch('/api/watchlist-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: Array.from(WATCHLIST) }),
+    }).catch(() => {/* silent */});
+  }, 600); // debounce 600ms pour eviter spam si toggle rapide
 }
 function toggleWatchlist(key) {
   if (WATCHLIST.has(key)) WATCHLIST.delete(key); else WATCHLIST.add(key);
   saveWatchlist();
 }
+
+// Au demarrage : tente de recuperer la watchlist serveur, prend le plus complet
+(async function initWatchlistFromServer() {
+  try {
+    const r = await fetch('/api/watchlist-sync');
+    if (!r.ok) return;
+    const data = await r.json();
+    const serverKeys = Array.isArray(data?.keys) ? data.keys : [];
+    if (WATCHLIST.size === 0 && serverKeys.length > 0) {
+      serverKeys.forEach(k => WATCHLIST.add(k));
+      try { localStorage.setItem('vbp_watchlist', JSON.stringify(Array.from(WATCHLIST))); } catch {}
+      if (typeof render === 'function' && DATA) render();
+    } else if (WATCHLIST.size > 0 && serverKeys.length === 0) {
+      syncWatchlistToServer();
+    }
+  } catch { /* silent */ }
+})();
 
 function fmtRoi(v) {
   if (v === null || v === undefined) return '<span class="roi-zero">—</span>';

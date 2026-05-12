@@ -18,6 +18,9 @@
     "api/watchlist-simulation.js": {
       "maxDuration": 30
     },
+    "api/watchlist-sync.js": {
+      "maxDuration": 10
+    },
     "api/veille-cron.js": {
       "maxDuration": 300
     },
