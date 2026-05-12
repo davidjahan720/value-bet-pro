@@ -275,6 +275,14 @@ export default async function handler(req, res) {
       }
     }
 
+    // Index par nom d'equipe pour cross-merge inter-ligues
+    // (ex: Bochum|D1 historique + Bochum|D2 cette saison apres relegation)
+    const teamsByName = new Map();
+    for (const td of teamData.values()) {
+      if (!teamsByName.has(td.team)) teamsByName.set(td.team, []);
+      teamsByName.get(td.team).push(td);
+    }
+
     // Calcul des stats par equipe x marche
     const results = [];
     for (const td of teamData.values()) {
@@ -310,6 +318,28 @@ export default async function handler(req, res) {
         }
         next = ps[NEXT_SEASON] || [0,0,0,0];
         perSeason[NEXT_SEASON] = next[1] > 0 ? { n: next[0], v: next[3], roi: (next[2]-next[1])/next[1]*100 } : null;
+
+        // Cross-league merge : pour chaque saison sans donnees ici, regarde si la
+        // meme equipe a joue cette saison dans une autre ligue (relegue/promu).
+        // On marque _otherLeague pour que l'UI puisse l'afficher.
+        const sameNameTds = teamsByName.get(td.team) || [];
+        if (sameNameTds.length > 1) {
+          for (const s of SEASONS) {
+            if (perSeason[s] && perSeason[s].n > 0) continue;
+            for (const otherTd of sameNameTds) {
+              if (otherTd === td) continue;
+              const ov = otherTd.perMarketSeason[m.key]?.[s];
+              if (ov && ov[1] > 0) {
+                perSeason[s] = {
+                  n: ov[0], v: ov[3],
+                  roi: (ov[2] - ov[1]) / ov[1] * 100,
+                  _otherLeague: otherTd.league,
+                };
+                break;
+              }
+            }
+          }
+        }
 
         const tot_n = bk_n + oos[0] + next[0];
         const tot_m = bk_m + oos[1] + next[1];

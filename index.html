@@ -1610,7 +1610,10 @@ function renderPerSeasonRow(market) {
     const v = market?.perSeason?.[s];
     if (!v || v.roi === null || v.roi === undefined) return `<td class="num"><span class="roi-zero">—</span></td>`;
     const cls = v.roi > 10 ? 'roi-strong' : (v.roi >= 0 ? 'roi-pos' : 'roi-neg');
-    return `<td class="num"><span class="${cls}">${v.roi >= 0 ? '+' : ''}${v.roi.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${v.n} · w=${v.v}</span></td>`;
+    const crossTag = v._otherLeague
+      ? `<br><span style="font-size:8px;color:var(--accent);font-weight:700;text-transform:uppercase" title="Saison jouée dans une autre division">↗${escapeHtml(v._otherLeague)}</span>`
+      : '';
+    return `<td class="num"><span class="${cls}">${v.roi >= 0 ? '+' : ''}${v.roi.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${v.n} · w=${v.v}</span>${crossTag}</td>`;
   }).join('');
   return cells;
 }
