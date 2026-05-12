@@ -144,8 +144,10 @@
   .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
 
   .table-wrapper { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: auto; }
+  th, td { padding: 6px 4px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td.team-name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+  td.team-name a strong { font-size: 11px; }
   th {
     background: var(--panel-2);
     color: var(--muted);
@@ -935,18 +937,18 @@ function render() {
           <th title="Ajouter à ma watchlist">★</th>
           <th>#</th>
           <th class="sortable">Équipe</th>
-          <th>Lig.</th>
-          <th class="num market-header">1 sec ROI 3y</th>
-          <th class="num market-header">1 sec 24-25</th>
-          <th class="num market-header">1 sec 25-26</th>
-          <th class="num market-header best">V+O2.5 ROI 3y</th>
-          <th class="num market-header best">V+O2.5 24-25</th>
-          <th class="num market-header best">V+O2.5 25-26</th>
-          <th class="num market-header">AH -1 ROI 3y</th>
-          <th class="num market-header" style="color:var(--accent-2)">🏆 Best 3y</th>
-          <th class="num market-header" style="color:var(--gold)">💎 Best bucket × marché</th>
-          <th>📅 Prochain dom.</th>
-          <th>🎯 Pari recommandé</th>
+          <th title="Ligue">Lig.</th>
+          <th class="num market-header" title="ROI 3y sur le marché 1N2 home win">1 ROI 3y</th>
+          <th class="num market-header" title="ROI saison 24-25 sur le marché 1 sec">1 · 24-25</th>
+          <th class="num market-header" title="ROI saison 25-26 sur le marché 1 sec">1 · 25-26</th>
+          <th class="num market-header best" title="ROI 3y sur Victoire + Over 2.5 buts">V+O ROI 3y</th>
+          <th class="num market-header best" title="ROI 24-25 sur V+Over 2.5">V+O · 24-25</th>
+          <th class="num market-header best" title="ROI 25-26 sur V+Over 2.5">V+O · 25-26</th>
+          <th class="num market-header" title="Asian Handicap -1 (favori dom doit gagner par 2+)">AH ROI 3y</th>
+          <th class="num market-header" style="color:var(--accent-2)" title="Meilleur marché agrégé sur 3 ans (1 sec / V+O2.5 / AH-1)">🏆 Best</th>
+          <th class="num market-header" style="color:var(--gold)" title="Meilleur couple marché × bucket de cote (contexte optimal)">💎 Spot</th>
+          <th title="Prochain match à domicile">📅 Next</th>
+          <th title="Pari recommandé pour le prochain match">🎯 Reco</th>
         </tr>
       </thead>
       <tbody>
@@ -957,7 +959,7 @@ function render() {
             <tr class="${t.isElite ? 'elite' : ''}">
               <td><button class="watch-star ${inWl ? 'active' : ''}" data-wl="${escapeAttr(wlKey)}" title="${inWl ? 'Retirer de ma watchlist' : 'Ajouter à ma watchlist'}">${inWl ? '★' : '☆'}</button></td>
               <td>${i+1}</td>
-              <td><a href="#" class="team-link" data-team="${escapeAttr(t.team)}" data-league="${escapeAttr(t.league)}"><strong>${t.team}</strong></a>${t.isElite ? ' <span style="color:var(--gold)" title="Élite cette saison">⚡</span>' : ''}</td>
+              <td class="team-name" title="${escapeAttr(t.team)}"><a href="#" class="team-link" data-team="${escapeAttr(t.team)}" data-league="${escapeAttr(t.league)}"><strong>${t.team}</strong></a>${t.isElite ? '<span style="color:var(--gold)" title="Élite cette saison">⚡</span>' : ''}</td>
               <td><span class="league-tag ${t.tier}">${t.league}</span></td>
               <td class="num market-cell">${fmtRoi(t.markets.win?.roi_3y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.win?.n_3y || 0}</span></td>
               <td class="num market-cell">${fmtSeasonCell(t.markets.win?.perSeason, '2425')}</td>
