@@ -363,6 +363,29 @@ export default async function handler(req, res) {
         }
       }
 
+      // bestBucketMarket : meilleur couple (marche x bucket de cote) toutes saisons
+      // -> identifie le contexte ou l'equipe a un edge maximal
+      // Critere : n >= 20 dans la cellule, ROI defini, parmi RECOMMENDED_MARKETS
+      let bestBucketMarket = null;
+      for (const k of RECOMMENDED_MARKETS) {
+        const mk = markets[k];
+        if (!mk || !mk.buckets) continue;
+        for (const b of ["TF","FN","PE","OU"]) {
+          const cell = mk.buckets[b];
+          if (!cell || cell.n < 20 || cell.roi === null) continue;
+          if (!bestBucketMarket || cell.roi > bestBucketMarket.roi) {
+            bestBucketMarket = {
+              marketKey: k,
+              marketLabel: mk.label,
+              bucket: b,
+              n: cell.n,
+              w: cell.w,
+              roi: cell.roi,
+            };
+          }
+        }
+      }
+
       results.push({
         team: td.team,
         league: td.league,
@@ -372,6 +395,7 @@ export default async function handler(req, res) {
         isTier1,
         isElite,
         bestMarket3y,
+        bestBucketMarket,
         nextMatches: td.future.slice(0, 3),
       });
     }

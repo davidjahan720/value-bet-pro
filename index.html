@@ -447,7 +447,7 @@
 
   <div class="footer">
     <p>
-      <strong>Marchés affichés :</strong> 1 sec (1N2 home win) · Victoire + Over 2.5 (combiné) · AH -1 (favori dom doit gagner par 2+). Pour chaque marché : <strong>ROI 3y</strong> agrégé (23-24 + 24-25 + 25-26) + 2 dernières saisons en colonnes dédiées. Colonne « Best 3y » = meilleur des 3 marchés. Données 5y et autres marchés disponibles dans le détail équipe (clic sur le nom).
+      <strong>Marchés affichés :</strong> 1 sec (1N2 home win) · Victoire + Over 2.5 (combiné) · AH -1 (favori dom doit gagner par 2+). Pour chaque marché : <strong>ROI 3y</strong> agrégé (23-24 + 24-25 + 25-26) + 2 dernières saisons en colonnes dédiées. Colonne « 🏆 Best 3y » = meilleur des 3 marchés agrégés. Colonne « 💎 Best bucket × marché » = meilleure combo (marché × bucket de cote) toutes saisons, n≥20 — c'est le contexte précis où l'équipe a son edge maximal. Données 5y + 6 marchés + buckets complets dans le détail équipe (clic sur le nom).
     </p>
     <p>
       <strong>Méthodologie :</strong> mise plate 1 €/match domicile, à la cote moyenne marché (Avg* football-data.co.uk). Cote DC 1X synthétisée via 1/(1/H+1/D). AH -1 inclut uniquement les matchs où la ligne handicap = -1.
@@ -585,6 +585,21 @@ function fmtBestMarket3y(t) {
   const cls = b.roi_3y > 20 ? 'roi-strong' : (b.roi_3y >= 0 ? 'roi-pos' : 'roi-neg');
   return `<div style="font-weight:700;color:var(--accent-2)">${labelShort[b.key] || b.label}</div>
           <div style="font-size:10px"><span class="${cls}">${b.roi_3y >= 0 ? '+' : ''}${b.roi_3y.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${b.n_3y}</span></div>`;
+}
+
+const BUCKET_TIP = {
+  TF: 'cote 1 < 1.50',
+  FN: 'cote 1 entre 1.50 et 2.00',
+  PE: 'cote 1 entre 2.00 et 2.80',
+  OU: 'cote 1 ≥ 2.80'
+};
+function fmtBestBucketMarket(t) {
+  const labelShort = { win: '1 sec', win_over25: 'V+O2.5', ah_minus1: 'AH-1' };
+  const b = t.bestBucketMarket;
+  if (!b) return '<span class="roi-zero">—</span>';
+  const cls = b.roi > 20 ? 'roi-strong' : (b.roi >= 0 ? 'roi-pos' : 'roi-neg');
+  return `<div style="font-weight:700;color:var(--gold)" title="${escapeAttr(BUCKET_TIP[b.bucket] || '')}">${labelShort[b.marketKey] || b.marketLabel} · ${b.bucket}</div>
+          <div style="font-size:10px"><span class="${cls}">${b.roi >= 0 ? '+' : ''}${b.roi.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${b.n} · w=${b.w}</span></div>`;
 }
 
 function getBucket(oddsH) {
@@ -758,6 +773,7 @@ function render() {
           <th class="num market-header best">V+O2.5 25-26</th>
           <th class="num market-header">AH -1 ROI 3y</th>
           <th class="num market-header" style="color:var(--accent-2)">🏆 Best 3y</th>
+          <th class="num market-header" style="color:var(--gold)">💎 Best bucket × marché</th>
           <th>📅 Prochain dom.</th>
           <th>🎯 Pari recommandé</th>
         </tr>
@@ -777,6 +793,7 @@ function render() {
               <td class="num market-cell" style="background:rgba(240,195,60,0.06)">${fmtSeasonCell(t.markets.win_over25?.perSeason, '2526')}</td>
               <td class="num market-cell">${fmtRoi(t.markets.ah_minus1?.roi_3y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.ah_minus1?.n_3y || 0}</span></td>
               <td class="num market-cell" style="background:rgba(163,113,247,0.06)">${fmtBestMarket3y(t)}</td>
+              <td class="num market-cell" style="background:rgba(240,195,60,0.06)">${fmtBestBucketMarket(t)}</td>
               <td>${fmtNextMatch(t)}</td>
               <td style="background:rgba(163,113,247,0.08)">${fmtRecommendedBet(t)}</td>
             </tr>
