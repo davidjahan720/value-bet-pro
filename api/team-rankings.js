@@ -29,8 +29,13 @@ const LEAGUES = [
 
 const SEASONS = ["2021", "2122", "2223", "2324", "2425", "2526", "2627"];
 const SEASONS_BACKTEST = ["2021", "2122", "2223", "2324", "2425"];
+const SEASONS_3Y = ["2324", "2425", "2526"]; // 2 saisons completes + saison en cours
 const CURRENT_SEASON = "2526";
 const NEXT_SEASON = "2627";
+
+// Marches consideres pour la recommandation "bestMarket3y" (les 3 marches phares affiches en colonnes)
+const RECOMMENDED_MARKETS = ["win", "win_over25", "ah_minus1"];
+const RECOMMENDED_MIN_N_3Y = 20; // echantillon minimum pour recommander un marche
 
 function parseCsv(csv) {
   const lines = csv.split(/\r?\n/).filter(l => l.trim());
@@ -289,6 +294,15 @@ export default async function handler(req, res) {
         const tot_r = bk_r + oos[2] + next[2];
         const tot_w = bk_w + oos[3] + next[3];
 
+        // ROI 3y agrege (saisons 23-24 + 24-25 + 25-26)
+        let n_3y=0, m_3y=0, r_3y=0, w_3y=0, sw_3y=0;
+        for (const s of SEASONS_3Y) {
+          const v = ps[s] || [0,0,0,0];
+          if (v[1] > 0) sw_3y++;
+          n_3y += v[0]; m_3y += v[1]; r_3y += v[2]; w_3y += v[3];
+        }
+        const roi_3y = m_3y > 0 ? +((r_3y - m_3y) / m_3y * 100).toFixed(2) : null;
+
         // ROI par bucket (TF/FN/PE/OU) sur l'ensemble des saisons
         const buckets = {};
         const bb = td.byBucket[m.key];
@@ -308,8 +322,10 @@ export default async function handler(req, res) {
         markets[m.key] = {
           label: m.label,
           n_5y: bk_n, n_oos: oos[0], n_next: next[0], n_total: tot_n,
+          n_3y, w_3y, seasonsWithData_3y: sw_3y,
           w_total: tot_w,
           roi_5y: bk_m > 0 ? +((bk_r-bk_m)/bk_m*100).toFixed(2) : null,
+          roi_3y,
           roi_oos: oos[1] > 0 ? +((oos[2]-oos[1])/oos[1]*100).toFixed(2) : null,
           roi_next: next[1] > 0 ? +((next[2]-next[1])/next[1]*100).toFixed(2) : null,
           roi_all: tot_m > 0 ? +((tot_r-tot_m)/tot_m*100).toFixed(2) : null,
@@ -336,6 +352,17 @@ export default async function handler(req, res) {
                    && (markets.win.roi_all || 0) >= 10;
       const isElite = isTier1 && markets.win.roi_oos !== null && markets.win.roi_oos > 0;
 
+      // bestMarket3y : meilleure recommandation parmi win / win_over25 / ah_minus1
+      // Critere : n_3y >= seuil ET roi_3y disponible. On prend le max ROI 3y.
+      let bestMarket3y = null;
+      for (const k of RECOMMENDED_MARKETS) {
+        const mk = markets[k];
+        if (!mk || mk.roi_3y === null || mk.n_3y < RECOMMENDED_MIN_N_3Y) continue;
+        if (!bestMarket3y || mk.roi_3y > bestMarket3y.roi_3y) {
+          bestMarket3y = { key: k, label: mk.label, roi_3y: mk.roi_3y, n_3y: mk.n_3y };
+        }
+      }
+
       results.push({
         team: td.team,
         league: td.league,
@@ -344,6 +371,7 @@ export default async function handler(req, res) {
         markets,
         isTier1,
         isElite,
+        bestMarket3y,
         nextMatches: td.future.slice(0, 3),
       });
     }
@@ -364,6 +392,9 @@ export default async function handler(req, res) {
         leaguesCovered: LEAGUES.length,
         seasonsCovered: SEASONS.length,
         markets: MARKETS.map(m => ({ key: m.key, label: m.label })),
+        seasons3y: SEASONS_3Y,
+        recommendedMarkets: RECOMMENDED_MARKETS,
+        minN3yForRecommendation: RECOMMENDED_MIN_N_3Y,
       },
       counts: {
         all: results.length,

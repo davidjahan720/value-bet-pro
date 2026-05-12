@@ -319,6 +319,47 @@
     text-align: center; padding: 40px 20px; color: var(--muted);
     border: 1px dashed var(--border); border-radius: 8px;
   }
+
+  /* ===== Equipe : lien clickable ===== */
+  .team-link { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--muted); }
+  .team-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ===== Modal detail equipe ===== */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); z-index: 1000;
+    align-items: flex-start; justify-content: center;
+    overflow-y: auto; padding: 30px 20px;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal-box {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    max-width: 1200px; width: 100%; padding: 24px;
+    max-height: calc(100vh - 60px); overflow-y: auto;
+  }
+  .modal-close {
+    float: right; background: transparent; border: 1px solid var(--border);
+    color: var(--muted); padding: 4px 10px; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 11px;
+  }
+  .modal-close:hover { color: var(--accent); border-color: var(--accent); }
+  .modal-box h2 { margin: 0 0 6px; font-size: 18px; }
+  .modal-box .modal-subtitle { color: var(--muted); font-size: 12px; margin-bottom: 18px; }
+  .modal-section { margin: 22px 0 12px; }
+  .modal-section h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--accent-2); margin: 0 0 8px;
+  }
+  .modal-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .modal-table th, .modal-table td {
+    padding: 6px 8px; border-bottom: 1px solid var(--border);
+    text-align: left; white-space: nowrap;
+  }
+  .modal-table th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px; }
+  .modal-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .modal-table .market-row-key { font-weight: 600; color: var(--accent-2); }
+  .modal-table .bucket-row td { border-bottom-color: rgba(48,54,61,0.3); font-size: 10px; }
+  .modal-highlight { background: rgba(163,113,247,0.08); }
 </style>
 </head>
 <body>
@@ -352,7 +393,7 @@
 
   <div class="market-section" style="border-left-color: var(--gold)">
     <h3 style="color: var(--gold)">🧭 Recommandation hybride (mode actif)</h3>
-    <p>Si la cote du prochain match est disponible, on détermine le <strong>bucket</strong> (Très favori / Favori normal / Pick'em / Outsider) et on prend le marché qui a le meilleur ROI <em>conditionné à ce type de match</em> (n≥30 dans le bucket). Sinon, fallback sur la reco globale (best ROI 5y, n≥20).</p>
+    <p>Si la cote du prochain match est disponible, on détermine le <strong>bucket</strong> (Très favori / Favori normal / Pick'em / Outsider) et on prend le marché qui a le meilleur ROI <em>conditionné à ce type de match</em> (n≥30 dans le bucket). Sinon, fallback sur la reco globale 3y (best ROI 3y parmi 1 sec / V+O2.5 / AH-1, n≥20).</p>
   </div>
 
   <div class="market-section" style="border-left-color: var(--green)">
@@ -381,7 +422,7 @@
       <option value="win_over25">Tri : ROI V+Over 2.5</option>
       <option value="ah_minus1">Tri : ROI AH -1</option>
     </select>
-    <input type="text" id="searchTeam" placeholder="🔍 Recherche équipe..." style="flex: 1; min-width: 200px;">
+    <input type="text" id="searchTeam" placeholder="🔍 Tape un nom d'équipe (puis clique le nom pour voir tout l'historique)" style="flex: 1; min-width: 200px;">
   </div>
 
   <div class="panel">
@@ -406,7 +447,7 @@
 
   <div class="footer">
     <p>
-      <strong>Marchés affichés :</strong> 1 sec (1N2 home win) · Victoire + Over 2.5 (combiné) · AH -1 (favori dom doit gagner par 2+). Pour chaque marché, ROI 5y backtest (2020-21 à 2024-25) + 2 dernières saisons en colonnes dédiées.
+      <strong>Marchés affichés :</strong> 1 sec (1N2 home win) · Victoire + Over 2.5 (combiné) · AH -1 (favori dom doit gagner par 2+). Pour chaque marché : <strong>ROI 3y</strong> agrégé (23-24 + 24-25 + 25-26) + 2 dernières saisons en colonnes dédiées. Colonne « Best 3y » = meilleur des 3 marchés. Données 5y et autres marchés disponibles dans le détail équipe (clic sur le nom).
     </p>
     <p>
       <strong>Méthodologie :</strong> mise plate 1 €/match domicile, à la cote moyenne marché (Avg* football-data.co.uk). Cote DC 1X synthétisée via 1/(1/H+1/D). AH -1 inclut uniquement les matchs où la ligne handicap = -1.
@@ -456,6 +497,13 @@
 
 </div>
 
+<div id="team-modal" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" id="team-modal-close">✕ Fermer</button>
+    <div id="team-modal-content"></div>
+  </div>
+</div>
+
 <script>
 let DATA = null;
 let CURRENT_FILTER = 'elite';
@@ -492,8 +540,8 @@ function applyFilters(teams) {
 
 function sortTeams(teams) {
   return [...teams].sort((a, b) => {
-    const av = a.markets[SORT_BY]?.roi_5y;
-    const bv = b.markets[SORT_BY]?.roi_5y;
+    const av = a.markets[SORT_BY]?.roi_3y;
+    const bv = b.markets[SORT_BY]?.roi_3y;
     if (av === null && bv === null) return 0;
     if (av === null || av === undefined) return 1;
     if (bv === null || bv === undefined) return -1;
@@ -505,12 +553,14 @@ function sortTeams(teams) {
 const VISIBLE_MARKETS = ['win', 'win_over25', 'ah_minus1'];
 
 function findBestMarket(t) {
-  // Marche au plus haut ROI 5y pour cette equipe (parmi VISIBLE_MARKETS, n>=20)
+  // Privilegie bestMarket3y servi par l'API (calcule cote serveur sur la fenetre 3y)
+  if (t.bestMarket3y) return t.bestMarket3y.key;
+  // Fallback : marche au plus haut ROI 3y (n>=20)
   let best = null; let bestRoi = -Infinity;
   for (const k of VISIBLE_MARKETS) {
     const m = t.markets[k];
-    if (!m || m.n_5y < 20) continue;
-    if ((m.roi_5y || 0) > bestRoi) { bestRoi = m.roi_5y; best = k; }
+    if (!m || m.roi_3y === null || (m.n_3y || 0) < 20) continue;
+    if (m.roi_3y > bestRoi) { bestRoi = m.roi_3y; best = k; }
   }
   return best;
 }
@@ -522,6 +572,19 @@ function fmtSeasonCell(perSeason, season) {
   }
   const cls = d.roi > 10 ? 'roi-strong' : (d.roi >= 0 ? 'roi-pos' : 'roi-neg');
   return `<span class="${cls}">${d.roi >= 0 ? '+' : ''}${d.roi.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${d.n}</span>`;
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function fmtBestMarket3y(t) {
+  const labelShort = { win: '1 sec', win_over25: 'V+O2.5', ah_minus1: 'AH-1' };
+  const b = t.bestMarket3y;
+  if (!b) return '<span class="roi-zero">—</span>';
+  const cls = b.roi_3y > 20 ? 'roi-strong' : (b.roi_3y >= 0 ? 'roi-pos' : 'roi-neg');
+  return `<div style="font-weight:700;color:var(--accent-2)">${labelShort[b.key] || b.label}</div>
+          <div style="font-size:10px"><span class="${cls}">${b.roi_3y >= 0 ? '+' : ''}${b.roi_3y.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${b.n_3y}</span></div>`;
 }
 
 function getBucket(oddsH) {
@@ -599,7 +662,7 @@ function fmtRecommendedBet(t) {
   //   1) Si on a la cote du prochain match -> determiner le bucket
   //      -> chercher le best marche dans ce bucket avec n >= MIN_BUCKET_N
   //      -> sinon fallback sur la reco globale
-  //   2) Si pas de cote -> reco globale (best ROI 5y, n >= 20)
+  //   2) Si pas de cote -> reco globale (best ROI 3y via bestMarket3y de l'API, n_3y >= 20)
   const labelMap = {
     'win': '✅ Victoire',
     'win_over25': '🎯 V + Over 2.5',
@@ -633,20 +696,23 @@ function fmtRecommendedBet(t) {
     }
   }
 
-  // Mode 2 (fallback) : reco globale historique
+  // Mode 2 (fallback) : reco globale 3y
   const bestKey = findBestMarket(t);
   if (!bestKey) return '<span class="roi-zero">—</span>';
   const m = t.markets[bestKey];
   const label = labelMap[bestKey] || m.label;
-  const roiCls = m.roi_5y > 20 ? 'roi-strong' : (m.roi_5y >= 10 ? 'roi-pos' : 'roi-pos');
+  const roi3y = m.roi_3y;
+  const n3y = m.n_3y || 0;
+  const roiCls = roi3y === null ? 'roi-zero' : (roi3y > 20 ? 'roi-strong' : (roi3y >= 0 ? 'roi-pos' : 'roi-neg'));
+  const roiText = roi3y === null ? '—' : `${roi3y >= 0 ? '+' : ''}${roi3y.toFixed(1)}%`;
   const noteSuffix = bucket
-    ? `<div style="font-size:9px;color:var(--muted);margin-top:1px">📊 sample bucket insuffisant — reco globale</div>`
-    : `<div style="font-size:9px;color:var(--muted);margin-top:1px">📊 cote indisponible — reco globale</div>`;
+    ? `<div style="font-size:9px;color:var(--muted);margin-top:1px">📊 sample bucket insuffisant — reco 3y</div>`
+    : `<div style="font-size:9px;color:var(--muted);margin-top:1px">📊 cote indisponible — reco 3y</div>`;
   return `
     <div style="font-weight:700;color:var(--accent-2)">${label}</div>
     <div style="font-size:10px;color:var(--muted);margin-top:2px">
-      <span class="${roiCls}">ROI 5y ${m.roi_5y >= 0 ? '+' : ''}${m.roi_5y.toFixed(1)}%</span>
-      · n=${m.n_5y}
+      <span class="${roiCls}">ROI 3y ${roiText}</span>
+      · n=${n3y}
     </div>
     ${noteSuffix}
   `;
@@ -684,13 +750,14 @@ function render() {
           <th>#</th>
           <th class="sortable">Équipe</th>
           <th>Lig.</th>
-          <th class="num market-header">1 sec ROI 5y</th>
+          <th class="num market-header">1 sec ROI 3y</th>
           <th class="num market-header">1 sec 24-25</th>
           <th class="num market-header">1 sec 25-26</th>
-          <th class="num market-header best">V+O2.5 ROI 5y</th>
+          <th class="num market-header best">V+O2.5 ROI 3y</th>
           <th class="num market-header best">V+O2.5 24-25</th>
           <th class="num market-header best">V+O2.5 25-26</th>
-          <th class="num market-header">AH -1 ROI 5y</th>
+          <th class="num market-header">AH -1 ROI 3y</th>
+          <th class="num market-header" style="color:var(--accent-2)">🏆 Best 3y</th>
           <th>📅 Prochain dom.</th>
           <th>🎯 Pari recommandé</th>
         </tr>
@@ -700,15 +767,16 @@ function render() {
           return `
             <tr class="${t.isElite ? 'elite' : ''}">
               <td>${i+1}</td>
-              <td><strong>${t.team}</strong>${t.isElite ? ' ★' : ''}</td>
+              <td><a href="#" class="team-link" data-team="${escapeAttr(t.team)}" data-league="${escapeAttr(t.league)}"><strong>${t.team}</strong></a>${t.isElite ? ' ★' : ''}</td>
               <td><span class="league-tag ${t.tier}">${t.league}</span></td>
-              <td class="num market-cell">${fmtRoi(t.markets.win?.roi_5y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.win?.n_5y || 0}</span></td>
+              <td class="num market-cell">${fmtRoi(t.markets.win?.roi_3y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.win?.n_3y || 0}</span></td>
               <td class="num market-cell">${fmtSeasonCell(t.markets.win?.perSeason, '2425')}</td>
               <td class="num market-cell">${fmtSeasonCell(t.markets.win?.perSeason, '2526')}</td>
-              <td class="num market-cell" style="background:rgba(240,195,60,0.06)">${fmtRoi(t.markets.win_over25?.roi_5y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.win_over25?.n_5y || 0}</span></td>
+              <td class="num market-cell" style="background:rgba(240,195,60,0.06)">${fmtRoi(t.markets.win_over25?.roi_3y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.win_over25?.n_3y || 0}</span></td>
               <td class="num market-cell" style="background:rgba(240,195,60,0.06)">${fmtSeasonCell(t.markets.win_over25?.perSeason, '2425')}</td>
               <td class="num market-cell" style="background:rgba(240,195,60,0.06)">${fmtSeasonCell(t.markets.win_over25?.perSeason, '2526')}</td>
-              <td class="num market-cell">${fmtRoi(t.markets.ah_minus1?.roi_5y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.ah_minus1?.n_5y || 0}</span></td>
+              <td class="num market-cell">${fmtRoi(t.markets.ah_minus1?.roi_3y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.ah_minus1?.n_3y || 0}</span></td>
+              <td class="num market-cell" style="background:rgba(163,113,247,0.06)">${fmtBestMarket3y(t)}</td>
               <td>${fmtNextMatch(t)}</td>
               <td style="background:rgba(163,113,247,0.08)">${fmtRecommendedBet(t)}</td>
             </tr>
@@ -984,7 +1052,7 @@ async function loadData() {
     render();
 
     // 1) TOP 4 : appel /api/live-odds (The Odds API) pour les cotes live
-    //    -> trouve dans l'ordre du tableau (deja trie par ROI 5y desc + Tier1 d'abord)
+    //    -> trouve dans l'ordre du tableau (deja trie par ROI desc + Tier1 d'abord)
     const top4 = DATA.teams.filter(t => t.isElite || t.isTier1).slice(0, 4);
     loadLiveOdds(top4);
 
@@ -1235,6 +1303,165 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 document.getElementById('veille-refresh').addEventListener('click', () => loadVeille(true));
+
+// ====================================================================
+// Modal detail equipe — click sur le nom dans le tableau
+// ====================================================================
+
+const SEASON_ORDER = ['2021','2122','2223','2324','2425','2526','2627'];
+const SEASON_LABEL = { '2021':'20-21','2122':'21-22','2223':'22-23','2324':'23-24','2425':'24-25','2526':'25-26','2627':'26-27' };
+const ALL_MARKET_KEYS = ['win','over25','under25','dc1x','win_over25','ah_minus1'];
+const BUCKET_FULL_LABEL = { TF:'Très favori (<1.50)', FN:'Favori normal (1.50-2.00)', PE:'Pickem (2.00-2.80)', OU:'Outsider (≥2.80)' };
+
+function findTeam(teamName, leagueCode) {
+  if (!DATA?.teams) return null;
+  return DATA.teams.find(t => t.team === teamName && (!leagueCode || t.league === leagueCode));
+}
+
+function renderPerSeasonRow(market) {
+  const cells = SEASON_ORDER.map(s => {
+    const v = market?.perSeason?.[s];
+    if (!v || v.roi === null || v.roi === undefined) return `<td class="num"><span class="roi-zero">—</span></td>`;
+    const cls = v.roi > 10 ? 'roi-strong' : (v.roi >= 0 ? 'roi-pos' : 'roi-neg');
+    return `<td class="num"><span class="${cls}">${v.roi >= 0 ? '+' : ''}${v.roi.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${v.n} · w=${v.v}</span></td>`;
+  }).join('');
+  return cells;
+}
+
+function renderBucketsRow(market) {
+  if (!market?.buckets) return '';
+  return ['TF','FN','PE','OU'].map(b => {
+    const v = market.buckets[b];
+    if (!v || v.n === 0 || v.roi === null) return `<td class="num"><span class="roi-zero">—</span></td>`;
+    const cls = v.roi > 10 ? 'roi-strong' : (v.roi >= 0 ? 'roi-pos' : 'roi-neg');
+    return `<td class="num"><span class="${cls}">${v.roi >= 0 ? '+' : ''}${v.roi.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${v.n} · w=${v.w}</span></td>`;
+  }).join('');
+}
+
+function openTeamModal(teamName, leagueCode) {
+  const t = findTeam(teamName, leagueCode);
+  const modal = document.getElementById('team-modal');
+  const content = document.getElementById('team-modal-content');
+  if (!t) {
+    content.innerHTML = `<h2>${escapeHtml(teamName)}</h2><p style="color:var(--muted)">Équipe introuvable dans le dataset.</p>`;
+    modal.classList.add('active');
+    return;
+  }
+
+  const badges = [];
+  if (t.isElite) badges.push('<span class="badge gold">★ ÉLITE</span>');
+  if (t.isTier1) badges.push('<span class="badge purple">TIER 1</span>');
+  badges.push(`<span class="badge">${escapeHtml(t.leagueName)} (${t.tier})</span>`);
+  if (t.bestMarket3y) {
+    const labelShort = { win:'1 sec', win_over25:'V+O2.5', ah_minus1:'AH-1' };
+    badges.push(`<span class="badge purple">🏆 Best 3y : ${labelShort[t.bestMarket3y.key] || t.bestMarket3y.label} (${t.bestMarket3y.roi_3y >= 0 ? '+' : ''}${t.bestMarket3y.roi_3y.toFixed(1)}%, n=${t.bestMarket3y.n_3y})</span>`);
+  }
+
+  // Tableau marchés × saisons
+  const marketsRows = ALL_MARKET_KEYS.map(k => {
+    const m = t.markets?.[k];
+    if (!m) return '';
+    const roi5 = m.roi_5y;
+    const roi3 = m.roi_3y;
+    const rowHighlight = (k === t.bestMarket3y?.key) ? ' class="modal-highlight"' : '';
+    const fmt = v => v === null ? '<span class="roi-zero">—</span>' : `<span class="${v > 10 ? 'roi-strong' : v >= 0 ? 'roi-pos' : 'roi-neg'}">${v >= 0 ? '+' : ''}${v.toFixed(1)}%</span>`;
+    return `<tr${rowHighlight}>
+      <td class="market-row-key">${escapeHtml(m.label)}</td>
+      <td class="num">${fmt(roi3)}<br><span style="font-size:9px;color:var(--muted)">n=${m.n_3y || 0}</span></td>
+      <td class="num">${fmt(roi5)}<br><span style="font-size:9px;color:var(--muted)">n=${m.n_5y || 0}</span></td>
+      ${renderPerSeasonRow(m)}
+      <td class="num">${m.posSeasons || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  // Tableau buckets pour chaque marché
+  const bucketsRows = ALL_MARKET_KEYS.map(k => {
+    const m = t.markets?.[k];
+    if (!m || !m.buckets) return '';
+    return `<tr>
+      <td class="market-row-key">${escapeHtml(m.label)}</td>
+      ${renderBucketsRow(m)}
+    </tr>`;
+  }).join('');
+
+  // Prochains matchs
+  let nextHtml = '';
+  if (t.nextHomeFixture) {
+    const f = t.nextHomeFixture;
+    const d = new Date(f.date);
+    nextHtml += `<p><strong>Prochain match à domicile :</strong> ${d.toLocaleDateString('fr-FR', { weekday:'long', day:'2-digit', month:'long' })} vs ${escapeHtml(f.opponent)}${f.odds ? ` · cote 1 : <strong>${f.odds.toFixed(2)}</strong>` : ''}${f.bestOdds ? ` · meilleure cote marché : ${f.bestOdds.toFixed(2)}` : ''}</p>`;
+  } else if (t.nextMatches?.length) {
+    nextHtml = '<ul style="font-size:12px;color:var(--muted)">' + t.nextMatches.map(n => `<li>${escapeHtml(n.date)} vs ${escapeHtml(n.opponent)}${n.odds ? ` (cote ${n.odds.toFixed(2)})` : ''}</li>`).join('') + '</ul>';
+  } else {
+    nextHtml = '<p style="color:var(--muted);font-size:12px">Aucun prochain match identifié.</p>';
+  }
+
+  content.innerHTML = `
+    <h2>${escapeHtml(t.team)}</h2>
+    <div class="modal-subtitle">${badges.join(' ')}</div>
+
+    <div class="modal-section">
+      <h3>ROI par marché — agrégats + saison par saison</h3>
+      <table class="modal-table">
+        <thead>
+          <tr>
+            <th>Marché</th>
+            <th class="num">ROI 3y</th>
+            <th class="num">ROI 5y</th>
+            ${SEASON_ORDER.map(s => `<th class="num">${SEASON_LABEL[s]}</th>`).join('')}
+            <th>Saisons +</th>
+          </tr>
+        </thead>
+        <tbody>${marketsRows}</tbody>
+      </table>
+    </div>
+
+    <div class="modal-section">
+      <h3>ROI par bucket de cote home (force adverse)</h3>
+      <table class="modal-table">
+        <thead>
+          <tr>
+            <th>Marché</th>
+            <th class="num">TF (&lt;1.50)</th>
+            <th class="num">FN (1.50-2.00)</th>
+            <th class="num">PE (2.00-2.80)</th>
+            <th class="num">OU (≥2.80)</th>
+          </tr>
+        </thead>
+        <tbody>${bucketsRows}</tbody>
+      </table>
+      <p style="font-size:10px;color:var(--muted);margin-top:6px">
+        TF = Très favori · FN = Favori normal · PE = Pick'em · OU = Outsider. Agrégat toutes saisons.
+      </p>
+    </div>
+
+    <div class="modal-section">
+      <h3>Prochains matchs</h3>
+      ${nextHtml}
+    </div>
+  `;
+  modal.classList.add('active');
+}
+
+function closeTeamModal() {
+  document.getElementById('team-modal').classList.remove('active');
+}
+
+document.addEventListener('click', e => {
+  const link = e.target.closest('.team-link');
+  if (link) {
+    e.preventDefault();
+    openTeamModal(link.dataset.team, link.dataset.league);
+  }
+});
+
+document.getElementById('team-modal-close').addEventListener('click', closeTeamModal);
+document.getElementById('team-modal').addEventListener('click', e => {
+  if (e.target.id === 'team-modal') closeTeamModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeTeamModal();
+});
 </script>
 </body>
 </html>
