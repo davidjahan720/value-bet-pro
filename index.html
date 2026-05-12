@@ -726,12 +726,12 @@ function escapeAttr(s) {
 }
 
 function fmtBestMarket3y(t) {
-  const labelShort = { win: '1 sec', win_over25: 'V+O2.5', ah_minus1: 'AH-1' };
+  const labelShort = { win: '1', win_over25: 'V+O', ah_minus1: 'AH' };
   const b = t.bestMarket3y;
   if (!b) return '<span class="roi-zero">—</span>';
   const cls = b.roi_3y > 20 ? 'roi-strong' : (b.roi_3y >= 0 ? 'roi-pos' : 'roi-neg');
-  return `<div style="font-weight:700;color:var(--accent-2)">${labelShort[b.key] || b.label}</div>
-          <div style="font-size:10px"><span class="${cls}">${b.roi_3y >= 0 ? '+' : ''}${b.roi_3y.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${b.n_3y}</span></div>`;
+  return `<div style="font-weight:700;color:var(--accent-2);font-size:11px">${labelShort[b.key] || b.label}</div>
+          <div><span class="${cls}">${b.roi_3y >= 0 ? '+' : ''}${b.roi_3y.toFixed(0)}%</span> <span style="font-size:9px;color:var(--muted)">(${b.n_3y})</span></div>`;
 }
 
 const BUCKET_TIP = {
@@ -741,12 +741,12 @@ const BUCKET_TIP = {
   OU: 'cote 1 ≥ 2.80'
 };
 function fmtBestBucketMarket(t) {
-  const labelShort = { win: '1 sec', win_over25: 'V+O2.5', ah_minus1: 'AH-1' };
+  const labelShort = { win: '1', win_over25: 'V+O', ah_minus1: 'AH' };
   const b = t.bestBucketMarket;
   if (!b) return '<span class="roi-zero">—</span>';
   const cls = b.roi > 20 ? 'roi-strong' : (b.roi >= 0 ? 'roi-pos' : 'roi-neg');
-  return `<div style="font-weight:700;color:var(--gold)" title="${escapeAttr(BUCKET_TIP[b.bucket] || '')}">${labelShort[b.marketKey] || b.marketLabel} · ${b.bucket}</div>
-          <div style="font-size:10px"><span class="${cls}">${b.roi >= 0 ? '+' : ''}${b.roi.toFixed(1)}%</span><br><span style="font-size:9px;color:var(--muted)">n=${b.n} · w=${b.w}</span></div>`;
+  return `<div style="font-weight:700;color:var(--gold);font-size:11px" title="${escapeAttr(BUCKET_TIP[b.bucket] || '')} - ${b.marketLabel} - n=${b.n} w=${b.w}">${labelShort[b.marketKey] || b.marketLabel}/${b.bucket}</div>
+          <div><span class="${cls}">${b.roi >= 0 ? '+' : ''}${b.roi.toFixed(0)}%</span> <span style="font-size:9px;color:var(--muted)">(${b.n})</span></div>`;
 }
 
 function getBucket(oddsH) {
