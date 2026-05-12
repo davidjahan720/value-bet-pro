@@ -158,11 +158,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // Group teams by league for efficient fetching
-    const leagueTeams = {};
+    // Index les noms d'equipes : recherche dans TOUTES les ligues pour suivre
+    // les promus/relegues (ex: Paris FC promu de F2 a F1 cette saison).
+    const teamNames = new Set(watched.map(t => t.team));
+    const teamOriginLeague = new Map();
     for (const t of watched) {
-      if (!leagueTeams[t.league]) leagueTeams[t.league] = new Set();
-      leagueTeams[t.league].add(t.team);
+      if (!teamOriginLeague.has(t.team)) teamOriginLeague.set(t.team, t.league);
     }
 
     // Fetch rankings pour avoir les buckets historiques
@@ -180,9 +181,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fetch CSVs en parallele pour chaque (ligue, saison)
+    // Fetch CSVs de TOUTES les ligues x saisons en parallele
+    // (necessaire pour detecter les matchs des equipes qui ont change de division)
     const fetchTasks = [];
-    for (const league of Object.keys(leagueTeams)) {
+    for (const league of LEAGUES_AVAILABLE) {
       for (const season of SEASONS_TRACK) {
         fetchTasks.push(
           fetchCsv(season, league).then(rows => ({ league, season, rows }))
@@ -194,17 +196,25 @@ export default async function handler(req, res) {
     // Build bet list
     const bets = [];
     for (const { league, season, rows } of datasets) {
-      const teamSet = leagueTeams[league];
       for (const row of rows) {
         const home = (row.HomeTeam || "").trim();
-        if (!teamSet.has(home)) continue;
+        if (!teamNames.has(home)) continue;
         if (!["H","D","A"].includes(row.FTR)) continue; // match non joue
 
         const oddsH = fnum(row, "AvgH", "BbAvH", "B365H");
         if (!oddsH) continue;
         const bucket = getBucket(oddsH);
 
-        const tr = rankingLookup.get(`${home}|${league}`);
+        // Cherche les buckets historiques : (team, league actuelle) sinon (team, ligue d'origine watchlist)
+        // Si l'equipe a change de division, on applique ses stats de l'ancienne ligue.
+        const originLeague = teamOriginLeague.get(home);
+        let tr = rankingLookup.get(`${home}|${league}`);
+        let crossDivision = false;
+        if (!tr && originLeague && originLeague !== league) {
+          tr = rankingLookup.get(`${home}|${originLeague}`);
+          crossDivision = true;
+        }
+
         let bestMarket = pickBestMarketForBucket(tr, bucket);
         let fallback = false;
         if (!bestMarket) {
@@ -228,6 +238,8 @@ export default async function handler(req, res) {
           dateLabel: row.Date,
           season,
           league,
+          originLeague: teamOriginLeague.get(home),
+          crossDivision,
           team: home,
           opponent: (row.AwayTeam || "").trim(),
           score: `${row.FTHG}-${row.FTAG}`,

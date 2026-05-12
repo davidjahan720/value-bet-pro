@@ -1504,9 +1504,12 @@ function renderWatchlistSimulation(data) {
     const histInfo = b.marketRoiHist !== null
       ? ` <span style="font-size:9px;color:var(--muted)" title="ROI historique de ce bucket × marché">(${b.marketRoiHist >= 0 ? '+' : ''}${b.marketRoiHist}%, n=${b.marketN})</span>`
       : (b.fallback ? ` <span style="font-size:9px;color:var(--muted)">(fallback)</span>` : '');
+    const crossDivTag = b.crossDivision
+      ? ` <span style="font-size:9px;color:var(--accent);font-weight:700" title="Equipe a change de division : suivi auto depuis ${escapeHtml(b.originLeague)}">↗${escapeHtml(b.league)}</span>`
+      : '';
     return `<tr class="${b.won ? 'won' : 'lost'}">
       <td>${escapeHtml(b.dateLabel || '')}</td>
-      <td><strong>${escapeHtml(b.team)}</strong></td>
+      <td><strong>${escapeHtml(b.team)}</strong>${crossDivTag}</td>
       <td>vs ${escapeHtml(b.opponent)}</td>
       <td><span class="league-tag">${escapeHtml(b.league)}</span></td>
       <td class="num">${b.score}</td>
