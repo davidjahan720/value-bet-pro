@@ -15,6 +15,9 @@
     "api/bet-log.js": {
       "maxDuration": 30
     },
+    "api/watchlist-simulation.js": {
+      "maxDuration": 30
+    },
     "api/veille-cron.js": {
       "maxDuration": 300
     },

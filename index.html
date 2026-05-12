@@ -324,6 +324,46 @@
   .team-link { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--muted); }
   .team-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
+  /* ===== Watchlist simulation panel ===== */
+  .wl-sim-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .wl-sim-recap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .wl-sim-stat {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+  }
+  .wl-sim-stat.highlight { border-color: var(--gold); background: rgba(240, 195, 60, 0.06); }
+  .wl-sim-stat-val { font-size: 18px; font-weight: 700; }
+  .wl-sim-stat-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+  .wl-sim-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .wl-sim-table th, .wl-sim-table td {
+    padding: 5px 7px; border-bottom: 1px solid var(--border);
+    text-align: left; white-space: nowrap;
+  }
+  .wl-sim-table th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px; position: sticky; top: 0; background: var(--panel); }
+  .wl-sim-table th.num, .wl-sim-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .wl-sim-table tr.won { background: rgba(63, 185, 80, 0.04); }
+  .wl-sim-table tr.lost { background: rgba(248, 81, 73, 0.04); }
+  .wl-sim-result-badge {
+    display: inline-block; padding: 1px 6px; border-radius: 3px;
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+  }
+  .wl-sim-result-badge.won { background: var(--green-bg); color: var(--green); }
+  .wl-sim-result-badge.lost { background: var(--red-bg); color: var(--red); }
+
   /* ===== Watchlist star button ===== */
   .watch-star {
     background: transparent;
@@ -442,6 +482,8 @@
     </select>
     <input type="text" id="searchTeam" placeholder="🔍 Tape un nom d'équipe (puis clique le nom pour voir tout l'historique)" style="flex: 1; min-width: 200px;">
   </div>
+
+  <div id="watchlist-sim-container"></div>
 
   <div class="panel">
     <h2>Classement multi-marchés</h2>
@@ -772,6 +814,16 @@ function render() {
   // Met a jour le badge count sur le bouton watchlist
   const wlBtn = document.querySelector('.toggle-btn[data-filter="watchlist"]');
   if (wlBtn) wlBtn.textContent = `★ Ma watchlist (${WATCHLIST.size})`;
+
+  // Render le panel de simulation watchlist quand on est sur ce filtre
+  const simContainer = document.getElementById('watchlist-sim-container');
+  if (simContainer) {
+    if (CURRENT_FILTER === 'watchlist' && WATCHLIST.size > 0) {
+      loadWatchlistSimulation();
+    } else {
+      simContainer.innerHTML = '';
+    }
+  }
 
   const filtered = applyFilters(DATA.teams);
   const sorted = sortTeams(filtered);
@@ -1374,6 +1426,130 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 document.getElementById('veille-refresh').addEventListener('click', () => loadVeille(true));
+
+// ====================================================================
+// Watchlist simulation — bet log + totals pour les equipes etoilees
+// ====================================================================
+
+let WL_SIM_LAST_KEY = null;
+let WL_SIM_LOADING = false;
+
+function watchlistAsParam() {
+  return Array.from(WATCHLIST).join(',');
+}
+
+async function loadWatchlistSimulation(force = false) {
+  const teamsParam = watchlistAsParam();
+  if (!teamsParam) return;
+  if (WL_SIM_LOADING) return;
+  // Dedup : ne recharge pas si la liste n'a pas change
+  if (!force && WL_SIM_LAST_KEY === teamsParam) return;
+
+  WL_SIM_LOADING = true;
+  const container = document.getElementById('watchlist-sim-container');
+  container.innerHTML = `
+    <div class="wl-sim-panel">
+      <div class="loading">
+        Simulation de paris sur ta watchlist…
+        <div class="loading-bar"></div>
+      </div>
+    </div>`;
+
+  try {
+    const url = `/api/watchlist-simulation?teams=${encodeURIComponent(teamsParam)}`;
+    const r = await fetch(url, { cache: force ? 'no-store' : 'default' });
+    const data = await r.json();
+    if (data.error) {
+      container.innerHTML = `<div class="wl-sim-panel"><div class="veille-empty">Erreur : ${escapeHtml(data.error)}</div></div>`;
+    } else {
+      container.innerHTML = renderWatchlistSimulation(data);
+    }
+    WL_SIM_LAST_KEY = teamsParam;
+  } catch (e) {
+    container.innerHTML = `<div class="wl-sim-panel"><div class="veille-empty">Erreur de chargement : ${escapeHtml(e.message || e)}</div></div>`;
+  } finally {
+    WL_SIM_LOADING = false;
+  }
+}
+
+function renderWatchlistSimulation(data) {
+  const s = data.summary || {};
+  const bets = data.bets || [];
+
+  // Recap stats
+  const profitCls = s.totalProfit >= 0 ? (s.totalProfit >= 10 ? 'roi-strong' : 'roi-pos') : 'roi-neg';
+  const roiCls = s.roi >= 0 ? (s.roi >= 10 ? 'roi-strong' : 'roi-pos') : 'roi-neg';
+  const recap = `
+    <div class="wl-sim-recap">
+      <div class="wl-sim-stat"><div class="wl-sim-stat-val">${s.teams || 0}</div><div class="wl-sim-stat-lbl">équipes suivies</div></div>
+      <div class="wl-sim-stat"><div class="wl-sim-stat-val">${s.bets || 0}</div><div class="wl-sim-stat-lbl">paris joués</div></div>
+      <div class="wl-sim-stat"><div class="wl-sim-stat-val"><span style="color:var(--green)">${s.wins || 0}</span> · <span style="color:var(--red)">${s.losses || 0}</span></div><div class="wl-sim-stat-lbl">gagnés · perdus (${(s.winRate || 0).toFixed(1)}%)</div></div>
+      <div class="wl-sim-stat"><div class="wl-sim-stat-val">${(s.totalStake || 0).toFixed(2)} €</div><div class="wl-sim-stat-lbl">total misé (1 €/pari)</div></div>
+      <div class="wl-sim-stat highlight"><div class="wl-sim-stat-val ${profitCls}">${(s.totalProfit || 0) >= 0 ? '+' : ''}${(s.totalProfit || 0).toFixed(2)} €</div><div class="wl-sim-stat-lbl">profit / perte</div></div>
+      <div class="wl-sim-stat highlight"><div class="wl-sim-stat-val ${roiCls}">${(s.roi || 0) >= 0 ? '+' : ''}${(s.roi || 0).toFixed(2)} %</div><div class="wl-sim-stat-lbl">ROI</div></div>
+    </div>`;
+
+  if (bets.length === 0) {
+    return `
+      <div class="wl-sim-panel">
+        <h2 style="margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">📊 Simulation paris — Watchlist</h2>
+        ${recap}
+        <div class="veille-empty">Aucun match joué cette saison pour les équipes watchlistées.</div>
+      </div>`;
+  }
+
+  // Bet log — du plus recent au plus ancien
+  const rows = bets.slice().reverse().map(b => {
+    const cumCls = b.cumProfit >= 0 ? 'roi-pos' : 'roi-neg';
+    const histInfo = b.marketRoiHist !== null
+      ? ` <span style="font-size:9px;color:var(--muted)" title="ROI historique de ce bucket × marché">(${b.marketRoiHist >= 0 ? '+' : ''}${b.marketRoiHist}%, n=${b.marketN})</span>`
+      : (b.fallback ? ` <span style="font-size:9px;color:var(--muted)">(fallback)</span>` : '');
+    return `<tr class="${b.won ? 'won' : 'lost'}">
+      <td>${escapeHtml(b.dateLabel || '')}</td>
+      <td><strong>${escapeHtml(b.team)}</strong></td>
+      <td>vs ${escapeHtml(b.opponent)}</td>
+      <td><span class="league-tag">${escapeHtml(b.league)}</span></td>
+      <td class="num">${b.score}</td>
+      <td class="num">${b.oddsH.toFixed(2)}</td>
+      <td><span class="event-category-tag" title="${escapeAttr(BUCKET_TIP[b.bucket] || '')}">${b.bucketLabel}</span></td>
+      <td><strong style="color:var(--accent-2)">${escapeHtml(b.marketLabel)}</strong>${histInfo}</td>
+      <td class="num">${b.cote.toFixed(2)}</td>
+      <td><span class="wl-sim-result-badge ${b.won ? 'won' : 'lost'}">${b.won ? '✓ GAGNÉ' : '✗ PERDU'}</span></td>
+      <td class="num"><strong class="${b.won ? 'roi-pos' : 'roi-neg'}">${b.profit >= 0 ? '+' : ''}${b.profit.toFixed(2)} €</strong></td>
+      <td class="num"><span class="${cumCls}">${b.cumProfit >= 0 ? '+' : ''}${b.cumProfit.toFixed(2)} €</span><br><span style="font-size:9px;color:var(--muted)">${b.cumRoi >= 0 ? '+' : ''}${b.cumRoi.toFixed(1)}%</span></td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="wl-sim-panel">
+      <h2 style="margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">📊 Simulation paris — Watchlist (saisons 25-26 + 26-27)</h2>
+      ${recap}
+      <p style="font-size:11px;color:var(--muted);margin:0 0 10px">
+        Stratégie : pour chaque match à domicile, pari sur le marché (1 sec / V+O2.5 / AH-1) au meilleur ROI historique du bucket de cote, mise plate 1 €. Tri du plus récent au plus ancien.
+      </p>
+      <div style="overflow-x:auto;max-height:600px;overflow-y:auto">
+        <table class="wl-sim-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Équipe</th>
+              <th>Adversaire</th>
+              <th>Lig.</th>
+              <th class="num">Score</th>
+              <th class="num">Cote 1</th>
+              <th>Bucket</th>
+              <th>Marché joué</th>
+              <th class="num">Cote pari</th>
+              <th>Résultat</th>
+              <th class="num">P&L</th>
+              <th class="num">Cumul</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
 
 // ====================================================================
 // Modal detail equipe — click sur le nom dans le tableau
