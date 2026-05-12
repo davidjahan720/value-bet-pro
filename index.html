@@ -1686,9 +1686,20 @@ function openTeamModal(teamName, leagueCode) {
     const roi3 = m.roi_3y;
     const rowHighlight = (k === t.bestMarket3y?.key) ? ' class="modal-highlight"' : '';
     const fmt = v => v === null ? '<span class="roi-zero">—</span>' : `<span class="${v > 10 ? 'roi-strong' : v >= 0 ? 'roi-pos' : 'roi-neg'}">${v >= 0 ? '+' : ''}${v.toFixed(1)}%</span>`;
+    // Rang ROI 3y parmi les equipes du dataset (n_3y >= 20)
+    let rankCell = '';
+    if (m.rank_3y && m.rank_3y_of) {
+      const r = m.rank_3y;
+      const total = m.rank_3y_of;
+      const rankCls = r <= 10 ? 'roi-strong' : (r <= 30 ? 'roi-pos' : (r <= total / 2 ? '' : 'roi-neg'));
+      rankCell = `<td class="num"><strong class="${rankCls}">#${r}</strong><br><span style="font-size:9px;color:var(--muted)">/ ${total}</span></td>`;
+    } else {
+      rankCell = `<td class="num"><span class="roi-zero">—</span><br><span style="font-size:9px;color:var(--muted)">n<20</span></td>`;
+    }
     return `<tr${rowHighlight}>
       <td class="market-row-key">${escapeHtml(m.label)}</td>
       <td class="num">${fmt(roi3)}<br><span style="font-size:9px;color:var(--muted)">n=${m.n_3y || 0}</span></td>
+      ${rankCell}
       <td class="num">${fmt(roi5)}<br><span style="font-size:9px;color:var(--muted)">n=${m.n_5y || 0}</span></td>
       ${renderPerSeasonRow(m)}
       <td class="num">${m.posSeasons || '—'}</td>
@@ -1728,6 +1739,7 @@ function openTeamModal(teamName, leagueCode) {
           <tr>
             <th>Marché</th>
             <th class="num">ROI 3y</th>
+            <th class="num" title="Rang dans le dataset par ROI 3y (parmi équipes n_3y ≥ 20)">Rang 3y</th>
             <th class="num">ROI 5y</th>
             ${SEASON_ORDER.map(s => `<th class="num">${SEASON_LABEL[s]}</th>`).join('')}
             <th>Saisons +</th>

@@ -452,6 +452,22 @@ export default async function handler(req, res) {
       });
     }
 
+    // Calcul du rang par marche : pour chaque marche, classement par ROI 3y desc
+    // parmi les equipes avec n_3y >= 20 (echantillon minimum decent).
+    // Le rang est attache a chaque team.markets[k].rank_3y + rank_3y_of (total)
+    for (const m of MARKETS) {
+      const eligible = results.filter(r => {
+        const mk = r.markets[m.key];
+        return mk && mk.roi_3y !== null && mk.n_3y >= 20;
+      });
+      eligible.sort((a, b) => (b.markets[m.key].roi_3y || 0) - (a.markets[m.key].roi_3y || 0));
+      const totalEligible = eligible.length;
+      eligible.forEach((r, i) => {
+        r.markets[m.key].rank_3y = i + 1;
+        r.markets[m.key].rank_3y_of = totalEligible;
+      });
+    }
+
     // Tri par ROI 5y (sur "win") descendant, Tier1 d'abord
     results.sort((a, b) => {
       if (a.isTier1 !== b.isTier1) return a.isTier1 ? -1 : 1;
