@@ -405,8 +405,8 @@
 
   <div class="controls">
     <div class="toggle-group">
-      <button class="toggle-btn active" data-filter="elite">Élite uniquement</button>
-      <button class="toggle-btn" data-filter="tier1">Tier 1</button>
+      <button class="toggle-btn" data-filter="elite">★ Élite (1 cette saison)</button>
+      <button class="toggle-btn active" data-filter="tier1">Top 10 (Tier 1)</button>
       <button class="toggle-btn" data-filter="all">Toutes (n≥60)</button>
     </div>
     <select id="leagueFilter">
@@ -418,9 +418,9 @@
       <option value="D2">D2 uniquement</option>
     </select>
     <select id="sortBy">
-      <option value="win">Tri : ROI 1 sec</option>
-      <option value="win_over25">Tri : ROI V+Over 2.5</option>
-      <option value="ah_minus1">Tri : ROI AH -1</option>
+      <option value="win_over25" selected>Tri : ROI V+Over 2.5 3y</option>
+      <option value="win">Tri : ROI 1 sec 3y</option>
+      <option value="ah_minus1">Tri : ROI AH -1 3y</option>
     </select>
     <input type="text" id="searchTeam" placeholder="🔍 Tape un nom d'équipe (puis clique le nom pour voir tout l'historique)" style="flex: 1; min-width: 200px;">
   </div>
@@ -506,11 +506,11 @@
 
 <script>
 let DATA = null;
-let CURRENT_FILTER = 'elite';
+let CURRENT_FILTER = 'tier1';
 let CURRENT_LEAGUE = '';
 let CURRENT_TIER = '';
 let CURRENT_SEARCH = '';
-let SORT_BY = 'win';
+let SORT_BY = 'win_over25';
 let SORT_DIR = -1;
 
 function fmtRoi(v) {
