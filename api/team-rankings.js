@@ -62,16 +62,38 @@ function fnumRaw(row, key) {
   return isNaN(v) ? null : v;
 }
 
-async function fetchCsv(season, league) {
+async function fetchCsv(season, league, attempt = 1) {
   const url = `https://www.football-data.co.uk/mmz4281/${season}/${league}.csv`;
   try {
     const r = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; ValueBetPro/1.0)" }
+      headers: {
+        // UA plus standard pour eviter d'etre rate-limite par le CDN football-data
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      },
     });
-    if (!r.ok) return [];
+    if (!r.ok) {
+      // 404 (la saison/ligue n'existe pas encore) = pas de retry
+      if (r.status === 404) return [];
+      // autre erreur HTTP : retry jusqu'a 2 fois
+      if (attempt < 3) {
+        await new Promise(res => setTimeout(res, 200 * attempt));
+        return fetchCsv(season, league, attempt + 1);
+      }
+      return [];
+    }
     const csv = await r.text();
-    return parseCsv(csv);
+    const rows = parseCsv(csv);
+    // Detection d'un fetch fantome : status 200 mais contenu vide / non-CSV
+    if (rows.length === 0 && csv.length > 200 && attempt < 3) {
+      await new Promise(res => setTimeout(res, 200 * attempt));
+      return fetchCsv(season, league, attempt + 1);
+    }
+    return rows;
   } catch (e) {
+    if (attempt < 3) {
+      await new Promise(res => setTimeout(res, 200 * attempt));
+      return fetchCsv(season, league, attempt + 1);
+    }
     return [];
   }
 }
