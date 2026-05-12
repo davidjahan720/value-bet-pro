@@ -324,6 +324,23 @@
   .team-link { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--muted); }
   .team-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
+  /* ===== Watchlist star button ===== */
+  .watch-star {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 4px 6px;
+    color: var(--muted);
+    opacity: 0.45;
+    transition: opacity 0.15s, color 0.15s, transform 0.1s;
+    font-family: inherit;
+  }
+  .watch-star:hover { opacity: 1; color: var(--gold); transform: scale(1.15); }
+  .watch-star.active { color: var(--gold); opacity: 1; }
+  .watch-star.active:hover { color: var(--accent); }
+
   /* ===== Modal detail equipe ===== */
   .modal-overlay {
     display: none; position: fixed; inset: 0;
@@ -405,7 +422,8 @@
 
   <div class="controls">
     <div class="toggle-group">
-      <button class="toggle-btn" data-filter="elite">★ Élite (1 cette saison)</button>
+      <button class="toggle-btn" data-filter="watchlist">★ Ma watchlist</button>
+      <button class="toggle-btn" data-filter="elite">Élite (1 cette saison)</button>
       <button class="toggle-btn active" data-filter="tier1">Top 10 (Tier 1)</button>
       <button class="toggle-btn" data-filter="all">Toutes (n≥60)</button>
     </div>
@@ -513,6 +531,22 @@ let CURRENT_SEARCH = '';
 let SORT_BY = 'win_over25';
 let SORT_DIR = -1;
 
+// ============================================================
+// Watchlist (persistee en localStorage, key = team|league_code)
+// ============================================================
+const WATCHLIST = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem('vbp_watchlist') || '[]')); }
+  catch { return new Set(); }
+})();
+function teamWatchKey(t) { return `${t.team}|${t.league}`; }
+function saveWatchlist() {
+  try { localStorage.setItem('vbp_watchlist', JSON.stringify(Array.from(WATCHLIST))); } catch {}
+}
+function toggleWatchlist(key) {
+  if (WATCHLIST.has(key)) WATCHLIST.delete(key); else WATCHLIST.add(key);
+  saveWatchlist();
+}
+
 function fmtRoi(v) {
   if (v === null || v === undefined) return '<span class="roi-zero">—</span>';
   const cls = v > 10 ? 'roi-strong' : (v >= 0 ? 'roi-pos' : 'roi-neg');
@@ -528,6 +562,7 @@ function applyFilters(teams) {
   return teams.filter(t => {
     if (CURRENT_FILTER === 'elite' && !t.isElite) return false;
     if (CURRENT_FILTER === 'tier1' && !t.isTier1) return false;
+    if (CURRENT_FILTER === 'watchlist' && !WATCHLIST.has(teamWatchKey(t))) return false;
     if (CURRENT_LEAGUE && t.league !== CURRENT_LEAGUE) return false;
     if (CURRENT_TIER && t.tier !== CURRENT_TIER) return false;
     if (CURRENT_SEARCH) {
@@ -734,8 +769,23 @@ function fmtRecommendedBet(t) {
 }
 
 function render() {
+  // Met a jour le badge count sur le bouton watchlist
+  const wlBtn = document.querySelector('.toggle-btn[data-filter="watchlist"]');
+  if (wlBtn) wlBtn.textContent = `★ Ma watchlist (${WATCHLIST.size})`;
+
   const filtered = applyFilters(DATA.teams);
   const sorted = sortTeams(filtered);
+
+  // Etat vide : utilisateur sur watchlist sans equipe etoilee
+  if (CURRENT_FILTER === 'watchlist' && sorted.length === 0) {
+    document.getElementById('content').innerHTML = `
+      <div class="veille-empty">
+        ★ Watchlist vide. Clique sur l'étoile à gauche d'une équipe pour l'ajouter.<br>
+        <span style="font-size:11px">Astuce : filtre sur Tier 1 ou Toutes pour parcourir, étoile celles qui t'intéressent, puis reviens ici.</span>
+      </div>`;
+    document.getElementById('summary').innerHTML = '';
+    return;
+  }
 
   // Summary : ROI portfolio par marche (Elite seulement)
   const elite = DATA.teams.filter(t => t.isElite);
@@ -762,6 +812,7 @@ function render() {
     <table>
       <thead>
         <tr>
+          <th title="Ajouter à ma watchlist">★</th>
           <th>#</th>
           <th class="sortable">Équipe</th>
           <th>Lig.</th>
@@ -780,10 +831,13 @@ function render() {
       </thead>
       <tbody>
         ${sorted.map((t, i) => {
+          const wlKey = teamWatchKey(t);
+          const inWl = WATCHLIST.has(wlKey);
           return `
             <tr class="${t.isElite ? 'elite' : ''}">
+              <td><button class="watch-star ${inWl ? 'active' : ''}" data-wl="${escapeAttr(wlKey)}" title="${inWl ? 'Retirer de ma watchlist' : 'Ajouter à ma watchlist'}">${inWl ? '★' : '☆'}</button></td>
               <td>${i+1}</td>
-              <td><a href="#" class="team-link" data-team="${escapeAttr(t.team)}" data-league="${escapeAttr(t.league)}"><strong>${t.team}</strong></a>${t.isElite ? ' ★' : ''}</td>
+              <td><a href="#" class="team-link" data-team="${escapeAttr(t.team)}" data-league="${escapeAttr(t.league)}"><strong>${t.team}</strong></a>${t.isElite ? ' <span style="color:var(--gold)" title="Élite cette saison">⚡</span>' : ''}</td>
               <td><span class="league-tag ${t.tier}">${t.league}</span></td>
               <td class="num market-cell">${fmtRoi(t.markets.win?.roi_3y)}<br><span style="font-size:9px;color:var(--muted)">n=${t.markets.win?.n_3y || 0}</span></td>
               <td class="num market-cell">${fmtSeasonCell(t.markets.win?.perSeason, '2425')}</td>
@@ -1469,6 +1523,15 @@ document.addEventListener('click', e => {
   if (link) {
     e.preventDefault();
     openTeamModal(link.dataset.team, link.dataset.league);
+    return;
+  }
+  const star = e.target.closest('.watch-star');
+  if (star) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleWatchlist(star.dataset.wl);
+    render();
+    return;
   }
 });
 
