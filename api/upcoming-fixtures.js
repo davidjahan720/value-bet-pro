@@ -44,7 +44,8 @@ async function fetchLeagueFixtures(fdCode, season) {
 }
 
 export default async function handler(req, res) {
-  const { teams = "", season = "2526", days = "10" } = req.query;
+  const { teams = "", season = "2526", days = "10", includeAway = "false" } = req.query;
+  const wantAway = includeAway === "true" || includeAway === "1";
   // teams = liste team|league separee par des virgules : "Lorient|F1,Aston Villa|E0"
   const wanted = teams.split(",").filter(Boolean).map(s => {
     const [team, lg] = s.split("|");
@@ -75,34 +76,48 @@ export default async function handler(req, res) {
     }
 
     for (const t of teamList) {
-      // chercher les matchs ou cette equipe est a domicile
-      const upcoming = fixtures
+      const homeUpcoming = fixtures
         .filter(f => {
           const date = new Date(f.DateUtc);
           return date >= now && date <= horizon && f.HomeTeam === t;
         })
         .sort((a, b) => new Date(a.DateUtc) - new Date(b.DateUtc));
 
-      if (upcoming.length > 0) {
-        const next = upcoming[0];
-        results.push({
-          team: t,
-          league: lg,
-          nextHome: {
-            date: next.DateUtc,
-            opponent: next.AwayTeam,
-            round: next.RoundNumber,
-            location: next.Location,
-          },
-          allUpcoming: upcoming.map(u => ({
-            date: u.DateUtc,
-            opponent: u.AwayTeam,
-            round: u.RoundNumber,
-          })),
-        });
-      } else {
-        results.push({ team: t, league: lg, nextHome: null });
-      }
+      const awayUpcoming = wantAway ? fixtures
+        .filter(f => {
+          const date = new Date(f.DateUtc);
+          return date >= now && date <= horizon && f.AwayTeam === t;
+        })
+        .sort((a, b) => new Date(a.DateUtc) - new Date(b.DateUtc)) : [];
+
+      const allMatches = [...homeUpcoming.map(u => ({
+        date: u.DateUtc,
+        opponent: u.AwayTeam,
+        round: u.RoundNumber,
+        isHome: true,
+      })), ...awayUpcoming.map(u => ({
+        date: u.DateUtc,
+        opponent: u.HomeTeam,
+        round: u.RoundNumber,
+        isHome: false,
+      }))].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      results.push({
+        team: t,
+        league: lg,
+        nextHome: homeUpcoming.length > 0 ? {
+          date: homeUpcoming[0].DateUtc,
+          opponent: homeUpcoming[0].AwayTeam,
+          round: homeUpcoming[0].RoundNumber,
+          location: homeUpcoming[0].Location,
+        } : null,
+        allUpcoming: homeUpcoming.map(u => ({
+          date: u.DateUtc,
+          opponent: u.AwayTeam,
+          round: u.RoundNumber,
+        })),
+        allMatches: wantAway ? allMatches : undefined,
+      });
     }
   }
 
