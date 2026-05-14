@@ -1407,7 +1407,6 @@ function renderVeilleCard(key, team) {
                 <span>${escapeHtml(ev.source || '—')} · ${fmtDateFr(ev.date || ev.ingested_at)}</span>
                 ${notCounted ? '<span style="color:var(--muted);margin-left:6px">· doublon ignoré</span>' : ''}
               </div>
-              ${ev.explanation ? `<div class="event-explanation">${escapeHtml(ev.explanation)}</div>` : ''}
             </div>
           </li>`;
       }).join('');
