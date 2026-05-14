@@ -484,9 +484,9 @@
 
   <div class="controls">
     <div class="toggle-group">
-      <button class="toggle-btn" data-filter="watchlist">★ Ma watchlist</button>
+      <button class="toggle-btn active" data-filter="watchlist">★ Ma watchlist</button>
       <button class="toggle-btn" data-filter="elite">Élite (1 cette saison)</button>
-      <button class="toggle-btn active" data-filter="tier1">Top 10 (Tier 1)</button>
+      <button class="toggle-btn" data-filter="tier1">Top 10 (Tier 1)</button>
       <button class="toggle-btn" data-filter="all">Toutes (n≥60)</button>
     </div>
     <select id="leagueFilter">
@@ -613,7 +613,7 @@
 
 <script>
 let DATA = null;
-let CURRENT_FILTER = 'tier1';
+let CURRENT_FILTER = 'watchlist';
 let CURRENT_LEAGUE = '';
 let CURRENT_TIER = '';
 let CURRENT_SEARCH = '';
