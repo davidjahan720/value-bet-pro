@@ -1948,10 +1948,25 @@ function renderWatchlistSimulation(data) {
 
   const periodLabel = view.period;
 
+  const countFor = (viewKey) => {
+    const ss = new Set(WL_SIM_VIEWS[viewKey].seasons);
+    return allBets.filter(b => ss.has(b.season)).length;
+  };
+  const seasonToggle = `
+    <div class="toggle-group" style="margin-bottom: 12px; flex-wrap: wrap;">
+      ${['completed', 'current', 'upcoming'].map(k => {
+        const n = countFor(k);
+        const isUpcomingEmpty = k === 'upcoming' && n === 0;
+        const tip = isUpcomingEmpty ? 'Saison 26-27 demarre en aout 2026 — aucun match joue pour le moment' : '';
+        return `<button class="toggle-btn ${WL_SIM_VIEW === k ? 'active' : ''}" onclick="setWatchlistSimView('${k}')" title="${tip}">${WL_SIM_VIEWS[k].label} (${n})</button>`;
+      }).join('')}
+    </div>`;
+
   if (bets.length === 0) {
     return `
       <div class="wl-sim-panel">
         <h2 style="margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">📊 Simulation paris — Watchlist (${periodLabel})</h2>
+        ${seasonToggle}
         ${recap}
         <div class="veille-empty">Aucun match joué sur cette période pour les équipes watchlistées.</div>
       </div>`;
@@ -2036,6 +2051,7 @@ function renderWatchlistSimulation(data) {
   return `
     <div class="wl-sim-panel">
       <h2 style="margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">📊 Simulation paris — Watchlist (${periodLabel})</h2>
+      ${seasonToggle}
       ${recap}
       ${teamTableHtml}
       <p style="font-size:11px;color:var(--muted);margin:0 0 10px">
