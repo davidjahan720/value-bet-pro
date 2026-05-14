@@ -483,23 +483,6 @@
 
   <div id="tab-classement" class="tab-content active">
 
-  <div class="market-section">
-    <h3>💡 Marché phare détecté : « Victoire + Over 2.5 »</h3>
-    <p>ROI portfolio Élite : <strong>+29.94 %</strong> sur 1 038 paris (vs +16.43 % pour le « 1 sec »). Cote moyenne ~3.00 — bankroll min recommandée : 80-100 unités.</p>
-  </div>
-
-  <div class="market-section" style="border-left-color: var(--gold)">
-    <h3 style="color: var(--gold)">🧭 Recommandation hybride (mode actif)</h3>
-    <p>Si la cote du prochain match est disponible, on détermine le <strong>bucket</strong> (Très favori / Favori normal / Pick'em / Outsider) et on prend le marché qui a le meilleur ROI <em>conditionné à ce type de match</em> (n≥30 dans le bucket). Sinon, fallback sur la reco globale 3y (best ROI 3y parmi 1 sec / V+O2.5 / AH-1, n≥20).</p>
-  </div>
-
-  <div class="market-section" style="border-left-color: var(--green)">
-    <h3 style="color: var(--green)">🔴 LIVE ODDS — Top 4 équipes</h3>
-    <p>Les <strong>4 premières équipes</strong> du classement sont enrichies avec des cotes <strong>live multi-bookmakers</strong> via The Odds API (cote moyenne EU + meilleure cote du marché pour line shopping). Limité au top 4 pour préserver le quota free 500 req/mois (~360 req/mois consommées).</p>
-  </div>
-
-  <div class="summary" id="summary"></div>
-
   <div class="controls">
     <div class="toggle-group">
       <button class="toggle-btn" data-filter="watchlist">★ Ma watchlist</button>
@@ -534,6 +517,23 @@
         Calcul des ROI sur 6 marchés en parallèle…
       </div>
     </div>
+  </div>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="market-section">
+    <h3>💡 Marché phare détecté : « Victoire + Over 2.5 »</h3>
+    <p>ROI portfolio Élite : <strong>+29.94 %</strong> sur 1 038 paris (vs +16.43 % pour le « 1 sec »). Cote moyenne ~3.00 — bankroll min recommandée : 80-100 unités.</p>
+  </div>
+
+  <div class="market-section" style="border-left-color: var(--gold)">
+    <h3 style="color: var(--gold)">🧭 Recommandation hybride (mode actif)</h3>
+    <p>Si la cote du prochain match est disponible, on détermine le <strong>bucket</strong> (Très favori / Favori normal / Pick'em / Outsider) et on prend le marché qui a le meilleur ROI <em>conditionné à ce type de match</em> (n≥30 dans le bucket). Sinon, fallback sur la reco globale 3y (best ROI 3y parmi 1 sec / V+O2.5 / AH-1, n≥20).</p>
+  </div>
+
+  <div class="market-section" style="border-left-color: var(--green)">
+    <h3 style="color: var(--green)">🔴 LIVE ODDS — Top 4 équipes</h3>
+    <p>Les <strong>4 premières équipes</strong> du classement sont enrichies avec des cotes <strong>live multi-bookmakers</strong> via The Odds API (cote moyenne EU + meilleure cote du marché pour line shopping). Limité au top 4 pour préserver le quota free 500 req/mois (~360 req/mois consommées).</p>
   </div>
 
   <div class="panel" id="betlog-panel" style="display:none">
