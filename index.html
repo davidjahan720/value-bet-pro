@@ -1504,16 +1504,17 @@ document.getElementById('veille-refresh').addEventListener('click', () => loadVe
 let WL_SIM_LAST_KEY = null;
 let WL_SIM_LOADING = false;
 let WL_SIM_DATA = null;
-let WL_SIM_SEASON = ''; // '' = 2 saisons, '2526' = 25-26 uniquement, '2627' = 26-27 uniquement
+let WL_SIM_VIEW = 'completed'; // 'completed' = 23-24 + 24-25, 'current' = 25-26, 'upcoming' = 26-27
 
-const WL_SIM_SEASON_LABEL = {
-  '': 'saisons 25-26 + 26-27',
-  '2526': 'saison 25-26',
-  '2627': 'saison 26-27',
+const WL_SIM_VIEWS = {
+  completed: { seasons: ['2324', '2425'], label: '2 saisons finies (23-24 + 24-25)', period: 'saisons 23-24 + 24-25' },
+  current:   { seasons: ['2526'],         label: 'En cours (25-26)',                 period: 'saison 25-26 en cours' },
+  upcoming:  { seasons: ['2627'],         label: 'À venir (26-27)',                  period: 'saison 26-27 à venir' },
 };
 
-function setWatchlistSimSeason(season) {
-  WL_SIM_SEASON = season || '';
+function setWatchlistSimView(view) {
+  if (!WL_SIM_VIEWS[view]) return;
+  WL_SIM_VIEW = view;
   if (!WL_SIM_DATA) return;
   const container = document.getElementById('watchlist-sim-container');
   if (container) container.innerHTML = renderWatchlistSimulation(WL_SIM_DATA);
@@ -1560,9 +1561,9 @@ async function loadWatchlistSimulation(force = false) {
 
 function renderWatchlistSimulation(data) {
   const allBets = data.bets || [];
-  const bets = WL_SIM_SEASON
-    ? allBets.filter(b => b.season === WL_SIM_SEASON)
-    : allBets;
+  const view = WL_SIM_VIEWS[WL_SIM_VIEW] || WL_SIM_VIEWS.completed;
+  const activeSeasons = new Set(view.seasons);
+  const bets = allBets.filter(b => activeSeasons.has(b.season));
 
   // Recalcule les running totals sur le sous-ensemble filtré (ordre chrono)
   let cumStake = 0, cumProfit = 0;
@@ -1600,17 +1601,21 @@ function renderWatchlistSimulation(data) {
       <div class="wl-sim-stat highlight"><div class="wl-sim-stat-val ${roiCls}">${s.roi >= 0 ? '+' : ''}${s.roi.toFixed(2)} %</div><div class="wl-sim-stat-lbl">ROI</div></div>
     </div>`;
 
-  const n2526 = allBets.filter(b => b.season === '2526').length;
-  const n2627 = allBets.filter(b => b.season === '2627').length;
-  const nAll = allBets.length;
+  const countFor = (viewKey) => {
+    const ss = new Set(WL_SIM_VIEWS[viewKey].seasons);
+    return allBets.filter(b => ss.has(b.season)).length;
+  };
   const seasonToggle = `
     <div class="toggle-group" style="margin-bottom: 12px; flex-wrap: wrap;">
-      <button class="toggle-btn ${WL_SIM_SEASON === '' ? 'active' : ''}" onclick="setWatchlistSimSeason('')">2 saisons (${nAll})</button>
-      <button class="toggle-btn ${WL_SIM_SEASON === '2526' ? 'active' : ''}" onclick="setWatchlistSimSeason('2526')">25-26 qui se termine (${n2526})</button>
-      <button class="toggle-btn ${WL_SIM_SEASON === '2627' ? 'active' : ''}" onclick="setWatchlistSimSeason('2627')" title="${n2627 === 0 ? 'Saison 26-27 demarre en aout 2026 — aucun match joue pour le moment' : ''}">26-27 à venir (${n2627})</button>
+      ${['completed', 'current', 'upcoming'].map(k => {
+        const n = countFor(k);
+        const isUpcomingEmpty = k === 'upcoming' && n === 0;
+        const tip = isUpcomingEmpty ? 'Saison 26-27 demarre en aout 2026 — aucun match joue pour le moment' : '';
+        return `<button class="toggle-btn ${WL_SIM_VIEW === k ? 'active' : ''}" onclick="setWatchlistSimView('${k}')" title="${tip}">${WL_SIM_VIEWS[k].label} (${n})</button>`;
+      }).join('')}
     </div>`;
 
-  const periodLabel = WL_SIM_SEASON_LABEL[WL_SIM_SEASON] || 'saisons 25-26 + 26-27';
+  const periodLabel = view.period;
 
   if (bets.length === 0) {
     return `
