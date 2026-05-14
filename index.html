@@ -1503,6 +1503,21 @@ document.getElementById('veille-refresh').addEventListener('click', () => loadVe
 
 let WL_SIM_LAST_KEY = null;
 let WL_SIM_LOADING = false;
+let WL_SIM_DATA = null;
+let WL_SIM_SEASON = ''; // '' = 2 saisons, '2526' = 25-26 uniquement, '2627' = 26-27 uniquement
+
+const WL_SIM_SEASON_LABEL = {
+  '': 'saisons 25-26 + 26-27',
+  '2526': 'saison 25-26',
+  '2627': 'saison 26-27',
+};
+
+function setWatchlistSimSeason(season) {
+  WL_SIM_SEASON = season || '';
+  if (!WL_SIM_DATA) return;
+  const container = document.getElementById('watchlist-sim-container');
+  if (container) container.innerHTML = renderWatchlistSimulation(WL_SIM_DATA);
+}
 
 function watchlistAsParam() {
   return Array.from(WATCHLIST).join(',');
@@ -1532,6 +1547,7 @@ async function loadWatchlistSimulation(force = false) {
     if (data.error) {
       container.innerHTML = `<div class="wl-sim-panel"><div class="veille-empty">Erreur : ${escapeHtml(data.error)}</div></div>`;
     } else {
+      WL_SIM_DATA = data;
       container.innerHTML = renderWatchlistSimulation(data);
     }
     WL_SIM_LAST_KEY = teamsParam;
@@ -1543,28 +1559,63 @@ async function loadWatchlistSimulation(force = false) {
 }
 
 function renderWatchlistSimulation(data) {
-  const s = data.summary || {};
-  const bets = data.bets || [];
+  const allBets = data.bets || [];
+  const bets = WL_SIM_SEASON
+    ? allBets.filter(b => b.season === WL_SIM_SEASON)
+    : allBets;
+
+  // Recalcule les running totals sur le sous-ensemble filtré (ordre chrono)
+  let cumStake = 0, cumProfit = 0;
+  for (const b of bets) {
+    cumStake += (b.stake || 1);
+    cumProfit += b.profit;
+    b.cumStake = +cumStake.toFixed(2);
+    b.cumProfit = +cumProfit.toFixed(2);
+    b.cumRoi = cumStake > 0 ? +((cumProfit / cumStake) * 100).toFixed(2) : 0;
+  }
+  const wins = bets.filter(b => b.won).length;
+  const losses = bets.length - wins;
+  const totalStake = +cumStake.toFixed(2);
+  const totalProfit = +cumProfit.toFixed(2);
+  const s = {
+    teams: data.summary?.teams || 0,
+    bets: bets.length,
+    wins, losses,
+    winRate: bets.length ? +(wins / bets.length * 100).toFixed(1) : 0,
+    totalStake,
+    totalProfit,
+    roi: totalStake > 0 ? +((totalProfit / totalStake) * 100).toFixed(2) : 0,
+  };
 
   // Recap stats
   const profitCls = s.totalProfit >= 0 ? (s.totalProfit >= 10 ? 'roi-strong' : 'roi-pos') : 'roi-neg';
   const roiCls = s.roi >= 0 ? (s.roi >= 10 ? 'roi-strong' : 'roi-pos') : 'roi-neg';
   const recap = `
     <div class="wl-sim-recap">
-      <div class="wl-sim-stat"><div class="wl-sim-stat-val">${s.teams || 0}</div><div class="wl-sim-stat-lbl">équipes suivies</div></div>
-      <div class="wl-sim-stat"><div class="wl-sim-stat-val">${s.bets || 0}</div><div class="wl-sim-stat-lbl">paris joués</div></div>
-      <div class="wl-sim-stat"><div class="wl-sim-stat-val"><span style="color:var(--green)">${s.wins || 0}</span> · <span style="color:var(--red)">${s.losses || 0}</span></div><div class="wl-sim-stat-lbl">gagnés · perdus (${(s.winRate || 0).toFixed(1)}%)</div></div>
-      <div class="wl-sim-stat"><div class="wl-sim-stat-val">${(s.totalStake || 0).toFixed(2)} €</div><div class="wl-sim-stat-lbl">total misé (1 €/pari)</div></div>
-      <div class="wl-sim-stat highlight"><div class="wl-sim-stat-val ${profitCls}">${(s.totalProfit || 0) >= 0 ? '+' : ''}${(s.totalProfit || 0).toFixed(2)} €</div><div class="wl-sim-stat-lbl">profit / perte</div></div>
-      <div class="wl-sim-stat highlight"><div class="wl-sim-stat-val ${roiCls}">${(s.roi || 0) >= 0 ? '+' : ''}${(s.roi || 0).toFixed(2)} %</div><div class="wl-sim-stat-lbl">ROI</div></div>
+      <div class="wl-sim-stat"><div class="wl-sim-stat-val">${s.teams}</div><div class="wl-sim-stat-lbl">équipes suivies</div></div>
+      <div class="wl-sim-stat"><div class="wl-sim-stat-val">${s.bets}</div><div class="wl-sim-stat-lbl">paris joués</div></div>
+      <div class="wl-sim-stat"><div class="wl-sim-stat-val"><span style="color:var(--green)">${s.wins}</span> · <span style="color:var(--red)">${s.losses}</span></div><div class="wl-sim-stat-lbl">gagnés · perdus (${s.winRate.toFixed(1)}%)</div></div>
+      <div class="wl-sim-stat"><div class="wl-sim-stat-val">${s.totalStake.toFixed(2)} €</div><div class="wl-sim-stat-lbl">total misé (1 €/pari)</div></div>
+      <div class="wl-sim-stat highlight"><div class="wl-sim-stat-val ${profitCls}">${s.totalProfit >= 0 ? '+' : ''}${s.totalProfit.toFixed(2)} €</div><div class="wl-sim-stat-lbl">profit / perte</div></div>
+      <div class="wl-sim-stat highlight"><div class="wl-sim-stat-val ${roiCls}">${s.roi >= 0 ? '+' : ''}${s.roi.toFixed(2)} %</div><div class="wl-sim-stat-lbl">ROI</div></div>
     </div>`;
+
+  const seasonToggle = `
+    <div class="toggle-group" style="margin-bottom: 12px; flex-wrap: wrap;">
+      <button class="toggle-btn ${WL_SIM_SEASON === '' ? 'active' : ''}" onclick="setWatchlistSimSeason('')">2 saisons (25-26 + 26-27)</button>
+      <button class="toggle-btn ${WL_SIM_SEASON === '2526' ? 'active' : ''}" onclick="setWatchlistSimSeason('2526')">25-26 (dernière)</button>
+      <button class="toggle-btn ${WL_SIM_SEASON === '2627' ? 'active' : ''}" onclick="setWatchlistSimSeason('2627')">26-27 (en cours)</button>
+    </div>`;
+
+  const periodLabel = WL_SIM_SEASON_LABEL[WL_SIM_SEASON] || 'saisons 25-26 + 26-27';
 
   if (bets.length === 0) {
     return `
       <div class="wl-sim-panel">
-        <h2 style="margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">📊 Simulation paris — Watchlist</h2>
+        <h2 style="margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">📊 Simulation paris — Watchlist (${periodLabel})</h2>
+        ${seasonToggle}
         ${recap}
-        <div class="veille-empty">Aucun match joué cette saison pour les équipes watchlistées.</div>
+        <div class="veille-empty">Aucun match joué sur cette période pour les équipes watchlistées.</div>
       </div>`;
   }
 
@@ -1595,7 +1646,8 @@ function renderWatchlistSimulation(data) {
 
   return `
     <div class="wl-sim-panel">
-      <h2 style="margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">📊 Simulation paris — Watchlist (saisons 25-26 + 26-27)</h2>
+      <h2 style="margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">📊 Simulation paris — Watchlist (${periodLabel})</h2>
+      ${seasonToggle}
       ${recap}
       <p style="font-size:11px;color:var(--muted);margin:0 0 10px">
         Stratégie : pour chaque match à domicile, pari sur le marché (1 sec / V+O2.5 / AH-1) au meilleur ROI historique du bucket de cote, mise plate 1 €. Tri du plus récent au plus ancien.
