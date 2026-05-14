@@ -5,22 +5,129 @@
 const FIXTURE_LEAGUES = {
   // codes football-data.co.uk -> identifiant fixturedownload + annee de demarrage saison
   // saison "2526" = 2025-26, demarre en aout 2025 -> annee = "2025"
+  // null = pas de feed JSON disponible sur fixturedownload pour cette ligue
   "F1":  "ligue-1",
-  "F2":  "ligue-2",
+  "F2":  null,                // pas de feed JSON
   "E0":  "epl",
   "E1":  "championship",
   "D1":  "bundesliga",
-  "D2":  "bundesliga-2",
+  "D2":  null,                // pas de feed JSON
   "SP1": "la-liga",
-  "SP2": "la-liga-2",
+  "SP2": null,                // pas de feed JSON (Segunda)
   "I1":  "serie-a",
-  "I2":  "serie-b",
+  "I2":  null,
   "P1":  "primeira-liga",
   "N1":  "eredivisie",
-  "SC0": "spfl-premiership",
-  "SC1": "spfl-championship",
-  "B1":  "pro-league",
+  "SC0": null,
+  "SC1": null,
+  "B1":  null,
 };
+
+// Aliases entre noms football-data.co.uk (utilises dans la watchlist du client)
+// et noms fixturedownload.com (utilises dans le feed JSON).
+// Lookup case-insensitive sur la cle.
+const TEAM_ALIASES = {
+  // Premier League / Championship
+  "QPR":             ["Queens Park Rangers"],
+  "Spurs":           ["Tottenham Hotspur", "Tottenham"],
+  "Tottenham":       ["Tottenham Hotspur"],
+  "Man City":        ["Manchester City"],
+  "Man United":      ["Manchester United"],
+  "Man Utd":         ["Manchester United"],
+  "Nott'm Forest":   ["Nottingham Forest"],
+  "Wolves":          ["Wolverhampton Wanderers", "Wolves"],
+  "Bournemouth":     ["AFC Bournemouth", "Bournemouth"],
+  "Leeds":           ["Leeds United", "Leeds"],
+  "Birmingham":      ["Birmingham City"],
+  "Blackburn":       ["Blackburn Rovers"],
+  "Bristol City":    ["Bristol City"],
+  "Charlton":        ["Charlton Athletic"],
+  "Coventry":        ["Coventry City"],
+  "Derby":           ["Derby County"],
+  "Hull":            ["Hull City"],
+  "Ipswich":         ["Ipswich Town"],
+  "Leicester":       ["Leicester City"],
+  "Middlesbrough":   ["Middlesbrough"],
+  "Millwall":        ["Millwall"],
+  "Norwich":         ["Norwich City"],
+  "Oxford":          ["Oxford United"],
+  "Portsmouth":      ["Portsmouth"],
+  "Preston":         ["Preston North End"],
+  "Sheffield Utd":   ["Sheffield United"],
+  "Sheffield United":["Sheffield United"],
+  "Sheffield Weds":  ["Sheffield Wednesday"],
+  "Southampton":     ["Southampton"],
+  "Stoke":           ["Stoke City"],
+  "Swansea":         ["Swansea City"],
+  "Watford":         ["Watford"],
+  "West Brom":       ["West Bromwich Albion"],
+  "Wrexham":         ["Wrexham"],
+
+  // Ligue 1 (FC Lorient, AS Monaco, Olympique de Marseille, etc.)
+  "Lorient":         ["FC Lorient"],
+  "Metz":            ["FC Metz"],
+  "Nantes":          ["FC Nantes"],
+  "Le Havre":        ["Havre Athletic Club", "Le Havre"],
+  "Lille":           ["LOSC Lille"],
+  "Nice":            ["OGC Nice"],
+  "Marseille":       ["Olympique de Marseille"],
+  "Lyon":            ["Olympique Lyonnais"],
+  "Paris SG":        ["Paris Saint-Germain"],
+  "PSG":             ["Paris Saint-Germain"],
+  "Paris FC":        ["Paris FC"],
+  "Lens":            ["RC Lens"],
+  "Strasbourg":      ["RC Strasbourg Alsace"],
+  "Brest":           ["Stade Brestois 29"],
+  "Rennes":          ["Stade Rennais FC"],
+  "Auxerre":         ["AJ Auxerre"],
+  "Angers":          ["Angers SCO"],
+  "Monaco":          ["AS Monaco"],
+  "Toulouse":        ["Toulouse FC"],
+
+  // La Liga
+  "Ath Madrid":      ["Atlético de Madrid", "Atletico de Madrid", "Atletico Madrid"],
+  "Ath Bilbao":      ["Athletic Club", "Athletic Bilbao"],
+  "Sociedad":        ["Real Sociedad"],
+  "Espanol":         ["RCD Espanyol de Barcelona", "Espanyol"],
+  "Alaves":          ["Deportivo Alavés", "Alaves"],
+  "Mallorca":        ["RCD Mallorca"],
+  "Oviedo":          ["Real Oviedo"],
+  "Betis":           ["Real Betis"],
+  "Sevilla":         ["Sevilla FC"],
+  "Barcelona":       ["FC Barcelona"],
+  "Getafe":          ["Getafe CF"],
+  "Girona":          ["Girona FC"],
+  "Levante":         ["Levante UD"],
+  "Valencia":        ["Valencia CF"],
+  "Vallecano":       ["Rayo Vallecano"],
+  "Osasuna":         ["CA Osasuna"],
+  "Villarreal":      ["Villarreal CF"],
+  "Elche":           ["Elche CF"],
+  "Real Madrid":     ["Real Madrid"],
+  "Celta":           ["Celta"],
+};
+
+function normalizeForMatch(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Renvoie true si le HomeTeam fixturedownload matche le nom watchlist (alias ou fuzzy)
+function isTeamMatch(homeTeam, wantedName) {
+  if (homeTeam === wantedName) return true;
+  const aliases = TEAM_ALIASES[wantedName] || [];
+  if (aliases.includes(homeTeam)) return true;
+  const aWanted = normalizeForMatch(wantedName);
+  const aHome   = normalizeForMatch(homeTeam);
+  if (!aWanted || !aHome) return false;
+  if (aWanted === aHome) return true;
+  // Substring match dans les deux sens (gere "Lorient" vs "fc lorient")
+  return aHome.includes(aWanted) || aWanted.includes(aHome);
+}
 
 function seasonCodeToYear(code) {
   // "2526" -> "2025" (saison commence en 2025)
@@ -29,6 +136,7 @@ function seasonCodeToYear(code) {
 
 async function fetchLeagueFixtures(fdCode, season) {
   const id = FIXTURE_LEAGUES[fdCode];
+  if (id === null) return { _unsupported: true };  // ligue connue mais pas de feed JSON
   if (!id) return null;
   const year = seasonCodeToYear(season);
   const url = `https://fixturedownload.com/feed/json/${id}-${year}`;
@@ -70,8 +178,9 @@ export default async function handler(req, res) {
 
   for (const [lg, teamList] of byLeague.entries()) {
     const fixtures = await fetchLeagueFixtures(lg, season);
-    if (!fixtures) {
-      for (const t of teamList) results.push({ team: t, league: lg, error: "fixtures non dispo" });
+    if (!fixtures || fixtures._unsupported) {
+      const errMsg = fixtures?._unsupported ? "ligue non supportee par fixturedownload" : "fixtures non dispo";
+      for (const t of teamList) results.push({ team: t, league: lg, error: errMsg });
       continue;
     }
 
@@ -79,14 +188,14 @@ export default async function handler(req, res) {
       const homeUpcoming = fixtures
         .filter(f => {
           const date = new Date(f.DateUtc);
-          return date >= now && date <= horizon && f.HomeTeam === t;
+          return date >= now && date <= horizon && isTeamMatch(f.HomeTeam, t);
         })
         .sort((a, b) => new Date(a.DateUtc) - new Date(b.DateUtc));
 
       const awayUpcoming = wantAway ? fixtures
         .filter(f => {
           const date = new Date(f.DateUtc);
-          return date >= now && date <= horizon && f.AwayTeam === t;
+          return date >= now && date <= horizon && isTeamMatch(f.AwayTeam, t);
         })
         .sort((a, b) => new Date(a.DateUtc) - new Date(b.DateUtc)) : [];
 

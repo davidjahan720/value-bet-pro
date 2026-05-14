@@ -829,6 +829,9 @@ function fmtNextMatch(t) {
     }
     // Pas de match domicile a venir
     if (WATCHLIST_FIXTURES_LOADED) {
+      if (t.fixtureError) {
+        return `<div style="font-size:10px;color:var(--muted);font-style:italic" title="${escapeAttr(t.fixtureError)}">⚠ Données fixtures indispo</div>`;
+      }
       return `<div style="font-size:10px;color:var(--muted);font-style:italic">⛔ Plus de matchs domicile</div>`;
     }
     return `<div style="font-size:10px;color:var(--muted)">⏳ Chargement…</div>`;
@@ -1630,6 +1633,7 @@ async function ensureWatchlistFixturesLoaded() {
           if (!f) continue;
           t.allHomeFixtures = f.allUpcoming || [];
           t.allMatches = f.allMatches || [];
+          t.fixtureError = f.error || null;
           if (!t.hasLiveOdds && f.nextHome) t.nextHomeFixture = f.nextHome;
         }
       }
