@@ -653,20 +653,27 @@ function toggleWatchlist(key) {
   _watchlistFixturesPromise = null;
 }
 
-// Au demarrage : tente de recuperer la watchlist serveur, prend le plus complet
+// Au demarrage : merge local + serveur (union, jamais de perte).
+// Si une cle est sur le serveur mais pas en local -> ajoutee (cas du tel avec ancien localStorage).
+// Si une cle est en local mais pas sur le serveur -> pushee (cas offline-puis-online).
 (async function initWatchlistFromServer() {
   try {
     const r = await fetch('/api/watchlist-sync');
     if (!r.ok) return;
     const data = await r.json();
     const serverKeys = Array.isArray(data?.keys) ? data.keys : [];
-    if (WATCHLIST.size === 0 && serverKeys.length > 0) {
-      serverKeys.forEach(k => WATCHLIST.add(k));
+    const localSet = new Set(WATCHLIST);
+    const serverSet = new Set(serverKeys);
+    let changed = false;
+    for (const k of serverSet) {
+      if (!localSet.has(k)) { WATCHLIST.add(k); changed = true; }
+    }
+    const localOnly = [...localSet].some(k => !serverSet.has(k));
+    if (changed) {
       try { localStorage.setItem('vbp_watchlist', JSON.stringify(Array.from(WATCHLIST))); } catch {}
       if (typeof render === 'function' && DATA) render();
-    } else if (WATCHLIST.size > 0 && serverKeys.length === 0) {
-      syncWatchlistToServer();
     }
+    if (localOnly) syncWatchlistToServer();
   } catch { /* silent */ }
 })();
 
