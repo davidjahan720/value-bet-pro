@@ -1732,11 +1732,16 @@ function renderPronosticWatchlist() {
   }
 
   const fmtDate = iso => {
-    const d = new Date(iso);
+    // fixturedownload renvoie "2026-05-15 19:00:00Z" (espace au lieu de T) — V8 ne parse pas ce format.
+    const normalized = typeof iso === 'string' ? iso.replace(' ', 'T') : iso;
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return String(iso).slice(0, 10);
     return d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' });
   };
 
-  const rows = matches.map(m => {
+  if (window?.console?.log) console.log('[pronostic] render', { teams: teams.length, matches: matches.length, nHome: matches.filter(m => m.isHome).length });
+
+  const rows = matches.map((m, idx) => {
     const t = m.team;
     const bucket = m.odds ? getBucket(m.odds) : null;
     const reco = recoForMatch(m);
@@ -1757,17 +1762,12 @@ function renderPronosticWatchlist() {
     const venueBadge = m.isHome
       ? '<span style="font-size:9px;background:rgba(63,185,80,0.15);color:var(--green);padding:1px 5px;border-radius:3px;font-weight:700;margin-right:4px" title="Match a domicile">DOM</span>'
       : '<span style="font-size:9px;background:rgba(248,81,73,0.12);color:var(--red);padding:1px 5px;border-radius:3px;font-weight:700;margin-right:4px" title="Match a l\'exterieur">EXT</span>';
-    return `
-      <tr style="${m.isHome ? '' : 'opacity: 0.85'}">
-        <td><strong>${fmtDate(m.date)}</strong>${m.round ? `<br><span style="font-size:9px;color:var(--muted)">J${m.round}</span>` : ''}</td>
-        <td>${venueBadge}</td>
-        <td><strong>${escapeHtml(t.team)}</strong>${t.isElite ? ' <span style="color:var(--gold)" title="Élite cette saison">⚡</span>' : ''}${liveBadge}</td>
-        <td>${m.isHome ? 'vs' : '@'} ${escapeHtml(m.opponent)}</td>
-        <td><span class="league-tag">${escapeHtml(t.leagueName || t.league)}</span></td>
-        <td class="num">${m.odds ? m.odds.toFixed(2) : '<span class="roi-zero">—</span>'}</td>
-        <td>${bucket ? `<span class="event-category-tag" title="${escapeAttr(BUCKET_TIP[bucket] || '')}">${BUCKET_LABEL[bucket]}</span>` : '<span class="roi-zero">—</span>'}</td>
-        <td>${recoTxt}</td>
-      </tr>`;
+    try {
+      return `<tr class="pronostic-row" data-idx="${idx}" style="${m.isHome ? '' : 'opacity:0.85'}"><td><strong>${fmtDate(m.date)}</strong>${m.round ? `<br><span style="font-size:9px;color:var(--muted)">J${m.round}</span>` : ''}</td><td>${venueBadge}</td><td><strong>${escapeHtml(t.team)}</strong>${t.isElite ? ' <span style="color:var(--gold)" title="Élite cette saison">⚡</span>' : ''}${liveBadge}</td><td>${m.isHome ? 'vs' : '@'} ${escapeHtml(m.opponent)}</td><td><span class="league-tag">${escapeHtml(t.leagueName || t.league)}</span></td><td class="num">${m.odds ? m.odds.toFixed(2) : '<span class="roi-zero">—</span>'}</td><td>${bucket ? `<span class="event-category-tag" title="${escapeAttr(BUCKET_TIP[bucket] || '')}">${BUCKET_LABEL[bucket]}</span>` : '<span class="roi-zero">—</span>'}</td><td>${recoTxt}</td></tr>`;
+    } catch (err) {
+      console.error('[pronostic] row error', idx, err, m);
+      return `<tr class="pronostic-row pronostic-error" data-idx="${idx}"><td colspan="8" style="color:var(--red);font-size:11px">⚠ erreur ligne ${idx} : ${escapeHtml(String(err.message || err))}</td></tr>`;
+    }
   }).join('');
 
   const emptyRow = teamsWithoutFixtures.length
