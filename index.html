@@ -519,30 +519,32 @@
 
   <div id="watchlist-sim-container"></div>
 
-  <div class="summary" id="summary"></div>
+  <div id="classement-extras">
+    <div class="summary" id="summary"></div>
 
-  <div class="market-section">
-    <h3>💡 Marché phare détecté : « Victoire + Over 2.5 »</h3>
-    <p>ROI portfolio Élite : <strong>+29.94 %</strong> sur 1 038 paris (vs +16.43 % pour le « 1 sec »). Cote moyenne ~3.00 — bankroll min recommandée : 80-100 unités.</p>
-  </div>
+    <div class="market-section">
+      <h3>💡 Marché phare détecté : « Victoire + Over 2.5 »</h3>
+      <p>ROI portfolio Élite : <strong>+29.94 %</strong> sur 1 038 paris (vs +16.43 % pour le « 1 sec »). Cote moyenne ~3.00 — bankroll min recommandée : 80-100 unités.</p>
+    </div>
 
-  <div class="market-section" style="border-left-color: var(--gold)">
-    <h3 style="color: var(--gold)">🧭 Recommandation hybride (mode actif)</h3>
-    <p>Si la cote du prochain match est disponible, on détermine le <strong>bucket</strong> (Très favori / Favori normal / Pick'em / Outsider) et on prend le marché qui a le meilleur ROI <em>conditionné à ce type de match</em> (n≥30 dans le bucket). Sinon, fallback sur la reco globale 3y (best ROI 3y parmi 1 sec / V+O2.5 / AH-1, n≥20).</p>
-  </div>
+    <div class="market-section" style="border-left-color: var(--gold)">
+      <h3 style="color: var(--gold)">🧭 Recommandation hybride (mode actif)</h3>
+      <p>Si la cote du prochain match est disponible, on détermine le <strong>bucket</strong> (Très favori / Favori normal / Pick'em / Outsider) et on prend le marché qui a le meilleur ROI <em>conditionné à ce type de match</em> (n≥30 dans le bucket). Sinon, fallback sur la reco globale 3y (best ROI 3y parmi 1 sec / V+O2.5 / AH-1, n≥20).</p>
+    </div>
 
-  <div class="market-section" style="border-left-color: var(--green)">
-    <h3 style="color: var(--green)">🔴 LIVE ODDS — Top 4 équipes</h3>
-    <p>Les <strong>4 premières équipes</strong> du classement sont enrichies avec des cotes <strong>live multi-bookmakers</strong> via The Odds API (cote moyenne EU + meilleure cote du marché pour line shopping). Limité au top 4 pour préserver le quota free 500 req/mois (~360 req/mois consommées).</p>
-  </div>
+    <div class="market-section" style="border-left-color: var(--green)">
+      <h3 style="color: var(--green)">🔴 LIVE ODDS — Top 4 équipes</h3>
+      <p>Les <strong>4 premières équipes</strong> du classement sont enrichies avec des cotes <strong>live multi-bookmakers</strong> via The Odds API (cote moyenne EU + meilleure cote du marché pour line shopping). Limité au top 4 pour préserver le quota free 500 req/mois (~360 req/mois consommées).</p>
+    </div>
 
-  <div class="panel" id="betlog-panel" style="display:none">
-    <h2>📓 Bet log historique — Top 4 Élite (walk-forward sans lookahead)</h2>
-    <p style="font-size:11px;color:var(--muted);margin:-8px 0 16px">
-      Simulation : chaque pari de 1 € a été placé sur le marché recommandé par la strat (bucket si n≥30 disponible, sinon global), en n'utilisant que les matchs joués <em>avant</em> celui-ci. Aucun biais de regard en avant.
-    </p>
-    <div id="betlog-summary"></div>
-    <div id="betlog-teams"></div>
+    <div class="panel" id="betlog-panel" style="display:none">
+      <h2>📓 Bet log historique — Top 4 Élite (walk-forward sans lookahead)</h2>
+      <p style="font-size:11px;color:var(--muted);margin:-8px 0 16px">
+        Simulation : chaque pari de 1 € a été placé sur le marché recommandé par la strat (bucket si n≥30 disponible, sinon global), en n'utilisant que les matchs joués <em>avant</em> celui-ci. Aucun biais de regard en avant.
+      </p>
+      <div id="betlog-summary"></div>
+      <div id="betlog-teams"></div>
+    </div>
   </div>
 
   <div class="footer">
@@ -930,6 +932,11 @@ function render() {
   // Met a jour le badge count sur le bouton watchlist
   const wlBtn = document.querySelector('.toggle-btn[data-filter="watchlist"]');
   if (wlBtn) wlBtn.textContent = `★ Ma watchlist (${WATCHLIST.size})`;
+
+  // Cache les blocs hors-watchlist (summary global, market sections, betlog Elite)
+  // quand on est sur le filtre watchlist
+  const extras = document.getElementById('classement-extras');
+  if (extras) extras.style.display = CURRENT_FILTER === 'watchlist' ? 'none' : '';
 
   // Sur filtre watchlist : assurer le chargement des fixtures pour toute la watchlist
   if (CURRENT_FILTER === 'watchlist' && WATCHLIST.size > 0 && !WATCHLIST_FIXTURES_LOADED) {
