@@ -477,6 +477,7 @@
 
   <nav class="tab-nav">
     <button class="tab-btn active" data-tab="classement">📊 Classement multi-marchés</button>
+    <button class="tab-btn" data-tab="pronostic">⭐ Pronostic Watchlist</button>
     <button class="tab-btn" data-tab="veille">🔔 Veille événementielle</button>
   </nav>
 
@@ -559,6 +560,16 @@
   </div>
 
   </div><!-- /tab-classement -->
+
+  <div id="tab-pronostic" class="tab-content">
+    <div class="market-section" style="border-left-color: var(--gold)">
+      <h3 style="color: var(--gold)">⭐ Pronostic Watchlist — pari recommandé par bucket</h3>
+      <p>Pour chaque équipe ★ de ta watchlist, on identifie le prochain match à domicile, on lit la cote « 1 » (live multi-bookmakers si Top 4, sinon fixturedownload.com), on en déduit le <strong>bucket</strong> (TF / FN / PE / OU) et on prend le marché qui a le meilleur ROI <em>conditionné à ce bucket</em> (n≥30). Fallback : ROI 3y agrégé.</p>
+    </div>
+    <div id="pronostic-content">
+      <div class="loading" style="padding: 40px; text-align:center; color: var(--muted);">Chargement…</div>
+    </div>
+  </div>
 
   <div id="tab-veille" class="tab-content">
     <div class="market-section" style="border-left-color: var(--green)">
@@ -981,6 +992,11 @@ function render() {
     ${sorted.length === 0 ? '<p style="text-align:center;color:var(--muted);padding:40px">Aucune équipe ne correspond aux filtres.</p>' : ''}
   `;
   document.getElementById('content').innerHTML = html;
+
+  // Refresh aussi le pronostic watchlist s'il est monté (suit les ★)
+  if (typeof renderPronosticWatchlist === 'function' && document.getElementById('pronostic-content')) {
+    renderPronosticWatchlist();
+  }
 }
 
 async function loadBetLog(top4Teams) {
@@ -1492,8 +1508,126 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       c.classList.toggle('active', c.id === 'tab-' + tab);
     });
     if (tab === 'veille') loadVeille();
+    if (tab === 'pronostic') openPronosticTab();
   });
 });
+
+// ============================================================
+// Pronostic Watchlist — onglet dédié, format classement focus bucket
+// ============================================================
+let PRONOSTIC_FIXTURES_LOADED = false;
+
+async function openPronosticTab() {
+  if (!DATA?.teams) {
+    document.getElementById('pronostic-content').innerHTML =
+      '<div class="loading" style="padding:40px;text-align:center;color:var(--muted)">Chargement des données…</div>';
+    return;
+  }
+  renderPronosticWatchlist();
+  // Premier passage : on s'assure que les fixtures sont chargees pour toutes les
+  // equipes de la watchlist (Tier1 deja fait par loadData, mais pas les autres).
+  if (!PRONOSTIC_FIXTURES_LOADED) {
+    PRONOSTIC_FIXTURES_LOADED = true;
+    const missing = DATA.teams.filter(t =>
+      WATCHLIST.has(teamWatchKey(t)) && !t.nextHomeFixture
+    );
+    if (missing.length) {
+      try {
+        const param = missing.map(t => `${t.team}|${t.league}`).join(',');
+        const r = await fetch(`/api/upcoming-fixtures?teams=${encodeURIComponent(param)}&days=21&season=2526`);
+        if (r.ok) {
+          const j = await r.json();
+          const map = new Map();
+          for (const f of j.fixtures || []) {
+            if (f.nextHome) map.set(`${f.team}|${f.league}`, f.nextHome);
+          }
+          for (const t of DATA.teams) {
+            const k = teamWatchKey(t);
+            if (map.has(k) && !t.hasLiveOdds) t.nextHomeFixture = map.get(k);
+          }
+        }
+      } catch { /* silent */ }
+      renderPronosticWatchlist();
+    }
+  }
+}
+
+function renderPronosticWatchlist() {
+  const container = document.getElementById('pronostic-content');
+  if (!container) return;
+  if (!DATA?.teams) {
+    container.innerHTML = '<div class="loading" style="padding:40px;text-align:center;color:var(--muted)">Chargement…</div>';
+    return;
+  }
+
+  const teams = DATA.teams.filter(t => WATCHLIST.has(teamWatchKey(t)));
+  if (teams.length === 0) {
+    container.innerHTML = `
+      <div class="veille-empty" style="padding:60px 20px;text-align:center">
+        ⭐ Ta watchlist est vide. Va dans <strong>📊 Classement multi-marchés</strong>,
+        clique sur l'étoile à côté du nom d'une équipe pour l'ajouter, puis reviens ici.
+      </div>`;
+    return;
+  }
+
+  // Score de tri : ROI bucket × marché du prochain match si dispo, sinon ROI 3y meilleur marché.
+  function pronosticScore(t) {
+    const odds = getNextMatchOdds(t);
+    const bucket = getBucket(odds);
+    if (bucket) {
+      const key = findBestMarketInBucket(t, bucket);
+      if (key) {
+        const b = t.markets?.[key]?.buckets?.[bucket];
+        if (b && b.roi !== null && b.roi !== undefined) return b.roi;
+      }
+    }
+    const bestKey = findBestMarket(t);
+    if (bestKey) return t.markets[bestKey]?.roi_3y ?? -999;
+    return -999;
+  }
+
+  const sorted = teams.slice().sort((a, b) => pronosticScore(b) - pronosticScore(a));
+
+  const rows = sorted.map((t, i) => {
+    const odds = getNextMatchOdds(t);
+    const bucket = getBucket(odds);
+    const hasFixture = !!(t.nextHomeFixture || t.nextMatches?.length);
+    return `
+      <tr>
+        <td>${i + 1}</td>
+        <td><strong>${escapeHtml(t.team)}</strong>${t.isElite ? ' <span style="color:var(--gold)" title="Élite cette saison">⚡</span>' : ''}</td>
+        <td><span class="league-tag">${escapeHtml(t.leagueName || t.league)}</span></td>
+        <td>${hasFixture ? fmtNextMatch(t) : '<span class="roi-zero">Pas de match dans 21j</span>'}</td>
+        <td>${odds ? odds.toFixed(2) : '<span class="roi-zero">—</span>'}</td>
+        <td>${bucket ? `<span class="event-category-tag" title="${escapeAttr(BUCKET_TIP[bucket] || '')}">${BUCKET_LABEL[bucket]}</span>` : '<span class="roi-zero">—</span>'}</td>
+        <td>${fmtRecommendedBet(t)}</td>
+      </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="panel">
+      <h2>⭐ Pronostic Watchlist — ${teams.length} équipe${teams.length > 1 ? 's' : ''}</h2>
+      <div class="table-wrapper" style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px">#</th>
+              <th>Équipe</th>
+              <th>Ligue</th>
+              <th>Prochain match dom.</th>
+              <th class="num">Cote 1</th>
+              <th>Bucket</th>
+              <th>Pari recommandé</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <p style="margin-top:14px;font-size:11px;color:var(--muted)">
+        Tri : ROI du pari recommandé (bucket × marché si n≥30, sinon ROI 3y agrégé). Cote « 1 » live multi-bookmakers pour le top 4 du classement global, sinon estimée via fixturedownload.com (pas de cote → bucket indéterminé → fallback ROI 3y).
+      </p>
+    </div>`;
+}
 
 document.getElementById('veille-refresh').addEventListener('click', () => loadVeille(true));
 
