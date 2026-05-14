@@ -1627,6 +1627,57 @@ function renderWatchlistSimulation(data) {
       </div>`;
   }
 
+  // Performance par equipe (sur la vue active)
+  const perTeam = new Map();
+  for (const b of bets) {
+    const key = `${b.team}|${b.league}`;
+    let p = perTeam.get(key);
+    if (!p) {
+      p = { team: b.team, league: b.league, n: 0, wins: 0, stake: 0, profit: 0 };
+      perTeam.set(key, p);
+    }
+    p.n++;
+    if (b.won) p.wins++;
+    p.stake += (b.stake || 1);
+    p.profit += b.profit;
+  }
+  const teamRows = [...perTeam.values()]
+    .map(p => ({ ...p, winRate: p.n ? (p.wins / p.n * 100) : 0, roi: p.stake > 0 ? (p.profit / p.stake * 100) : 0 }))
+    .sort((a, b) => b.roi - a.roi);
+
+  const teamTableHtml = teamRows.length === 0 ? '' : `
+    <h3 style="margin:18px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted)">Performance par équipe (${view.period})</h3>
+    <div style="overflow-x:auto;margin-bottom:14px">
+      <table class="wl-sim-table">
+        <thead>
+          <tr>
+            <th>Équipe</th>
+            <th>Ligue</th>
+            <th class="num">Paris</th>
+            <th class="num">V/D</th>
+            <th class="num">Win %</th>
+            <th class="num">Profit</th>
+            <th class="num">ROI %</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${teamRows.map(t => {
+            const roiCls = t.roi >= 10 ? 'roi-strong' : (t.roi >= 0 ? 'roi-pos' : 'roi-neg');
+            const profCls = t.profit >= 0 ? 'roi-pos' : 'roi-neg';
+            return `<tr>
+              <td><strong>${escapeHtml(t.team)}</strong></td>
+              <td><span class="league-tag">${escapeHtml(t.league)}</span></td>
+              <td class="num">${t.n}</td>
+              <td class="num"><span style="color:var(--green)">${t.wins}</span> / <span style="color:var(--red)">${t.n - t.wins}</span></td>
+              <td class="num">${t.winRate.toFixed(1)}%</td>
+              <td class="num"><span class="${profCls}">${t.profit >= 0 ? '+' : ''}${t.profit.toFixed(2)} €</span></td>
+              <td class="num"><span class="${roiCls}">${t.roi >= 0 ? '+' : ''}${t.roi.toFixed(2)} %</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
   // Bet log — du plus recent au plus ancien
   const rows = bets.slice().reverse().map(b => {
     const cumCls = b.cumProfit >= 0 ? 'roi-pos' : 'roi-neg';
@@ -1657,6 +1708,7 @@ function renderWatchlistSimulation(data) {
       <h2 style="margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">📊 Simulation paris — Watchlist (${periodLabel})</h2>
       ${seasonToggle}
       ${recap}
+      ${teamTableHtml}
       <p style="font-size:11px;color:var(--muted);margin:0 0 10px">
         Stratégie : pour chaque match à domicile, pari sur le marché (1 sec / V+O2.5 / AH-1) au meilleur ROI historique du bucket de cote, mise plate 1 €. Tri du plus récent au plus ancien.
       </p>
