@@ -582,7 +582,13 @@
         <div class="last-update" id="veille-last-update">Chargement de la veille…</div>
         <div class="last-update" id="veille-rotation" style="margin-top:2px"></div>
       </div>
-      <button class="toggle-btn" id="veille-refresh" style="font-size: 11px;">🔄 Recharger</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="toggle-group" style="margin-bottom:0">
+          <button class="toggle-btn active" id="veille-filter-wl" style="font-size: 11px;" data-veille-filter="watchlist">★ Ma watchlist</button>
+          <button class="toggle-btn" id="veille-filter-all" style="font-size: 11px;" data-veille-filter="all">Tout (rotation + watchlist)</button>
+        </div>
+        <button class="toggle-btn" id="veille-refresh" style="font-size: 11px;">🔄 Recharger</button>
+      </div>
     </div>
 
     <div id="veille-content">
@@ -1449,9 +1455,43 @@ function renderVeilleCard(key, team) {
     </div>`;
 }
 
+// Slug equivalent au teamKey() du backend (veille-cron.js)
+function veilleSlug(s) {
+  return String(s).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+// Mirror du TEAM_NAME_OVERRIDES backend (pour matcher les noms football-data
+// vs les searchNames stockes dans la veille)
+const VEILLE_NAME_OVERRIDES = {
+  'Ath Madrid':    'Atletico Madrid',
+  'Ath Bilbao':    'Athletic Bilbao',
+  "Nott'm Forest": 'Nottingham Forest',
+  'Man United':    'Manchester United',
+  'Man City':      'Manchester City',
+  'Sociedad':      'Real Sociedad',
+};
+let VEILLE_FILTER = 'watchlist'; // 'watchlist' (defaut) ou 'all'
+
+function watchlistVeilleSlugs() {
+  const out = new Set();
+  for (const k of WATCHLIST) {
+    const teamName = k.split('|')[0];
+    out.add(veilleSlug(teamName));
+    const ov = VEILLE_NAME_OVERRIDES[teamName];
+    if (ov) out.add(veilleSlug(ov));
+  }
+  return out;
+}
+
 function renderVeille() {
   const container = document.getElementById('veille-content');
   const lastUpdateEl = document.getElementById('veille-last-update');
+
+  // Sync l'etat actif des boutons filtre
+  document.querySelectorAll('[data-veille-filter]').forEach(b => {
+    b.classList.toggle('active', b.dataset.veilleFilter === VEILLE_FILTER);
+  });
 
   if (!VEILLE_DATA) {
     container.innerHTML = '<div class="veille-empty">Veille indisponible. Vérifiez que le cron a tourné au moins une fois et que les secrets Vercel sont configurés.</div>';
@@ -1466,10 +1506,24 @@ function renderVeille() {
   }
 
   const teamsObj = VEILLE_DATA.teams || {};
-  const teamKeys = Object.keys(teamsObj);
+  let teamKeys = Object.keys(teamsObj);
+
+  // Filtre watchlist (defaut) : ne garde que les equipes etoilees localement
+  if (VEILLE_FILTER === 'watchlist') {
+    const wlSlugs = watchlistVeilleSlugs();
+    teamKeys = teamKeys.filter(k => wlSlugs.has(k));
+  }
 
   if (teamKeys.length === 0) {
-    container.innerHTML = '<div class="veille-empty">Aucune équipe dans le store. Le cron n\'a pas encore tourné ou a planté.</div>';
+    if (VEILLE_FILTER === 'watchlist') {
+      const totalInStore = Object.keys(teamsObj).length;
+      container.innerHTML = `<div class="veille-empty">
+        Aucune équipe de ta watchlist n'a encore de veille générée.
+        ${totalInStore > 0 ? `<br><br><span style="font-size:12px">Le store contient ${totalInStore} équipe${totalInStore > 1 ? 's' : ''} (rotation top 4) mais aucune ne figure dans ta watchlist. Le cron quotidien (21h UTC) ajoutera tes équipes ★ à la prochaine génération. Tu peux aussi <button class="toggle-btn" onclick="setVeilleFilter('all')" style="font-size:11px;display:inline-block">Voir tout</button>.</span>` : ''}
+      </div>`;
+    } else {
+      container.innerHTML = '<div class="veille-empty">Aucune équipe dans le store. Le cron n\'a pas encore tourné ou a planté.</div>';
+    }
     return;
   }
 
@@ -1768,6 +1822,14 @@ const MARKET_ICON = {
 };
 
 document.getElementById('veille-refresh').addEventListener('click', () => loadVeille(true));
+
+function setVeilleFilter(f) {
+  VEILLE_FILTER = (f === 'all') ? 'all' : 'watchlist';
+  renderVeille();
+}
+document.querySelectorAll('[data-veille-filter]').forEach(btn => {
+  btn.addEventListener('click', () => setVeilleFilter(btn.dataset.veilleFilter));
+});
 
 // ====================================================================
 // Watchlist simulation — bet log + totals pour les equipes etoilees
