@@ -1534,7 +1534,7 @@ async function openPronosticTab() {
     if (wlTeams.length) {
       try {
         const param = wlTeams.map(t => `${t.team}|${t.league}`).join(',');
-        const r = await fetch(`/api/upcoming-fixtures?teams=${encodeURIComponent(param)}&days=60&season=2526`);
+        const r = await fetch(`/api/upcoming-fixtures?teams=${encodeURIComponent(param)}&days=90&season=2526&includeAway=true`);
         if (r.ok) {
           const j = await r.json();
           const map = new Map();
@@ -1545,6 +1545,7 @@ async function openPronosticTab() {
             const f = map.get(teamWatchKey(t));
             if (!f) continue;
             t.allHomeFixtures = f.allUpcoming || [];
+            t.allMatches = f.allMatches || [];
             // ne pas ecraser nextHomeFixture si on a deja les live odds (source plus riche)
             if (!t.hasLiveOdds && f.nextHome) t.nextHomeFixture = f.nextHome;
           }
@@ -1573,33 +1574,51 @@ function renderPronosticWatchlist() {
     return;
   }
 
-  // Construit une liste plate { team, date, opponent, isFirst, ... } pour tous les
-  // matchs domicile a venir de toutes les equipes watchlistees.
+  // Construit une liste plate de matchs (home + away) pour toutes les equipes watchlistees.
+  // Dedupe les rencontres entre 2 equipes ★ (n'apparaissent qu'une fois).
+  const seen = new Set();
   const matches = [];
   const teamsWithoutFixtures = [];
+  let firstHomeByTeam = new Map();
   for (const t of teams) {
-    const list = t.allHomeFixtures && t.allHomeFixtures.length
-      ? t.allHomeFixtures
-      : (t.nextHomeFixture ? [t.nextHomeFixture] : []);
+    const list = t.allMatches && t.allMatches.length
+      ? t.allMatches
+      : (t.allHomeFixtures && t.allHomeFixtures.length
+          ? t.allHomeFixtures.map(m => ({ ...m, isHome: true }))
+          : (t.nextHomeFixture ? [{ ...t.nextHomeFixture, isHome: true }] : []));
     if (!list.length) {
       teamsWithoutFixtures.push(t);
       continue;
     }
-    list.forEach((m, idx) => {
+    list.forEach(m => {
+      const isHome = m.isHome !== false; // defaut true si champ absent
+      // cle de dedup : date + paire d'equipes (peu importe l'ordre)
+      const home = isHome ? t.team : m.opponent;
+      const away = isHome ? m.opponent : t.team;
+      const dateStr = m.date.slice(0, 10);
+      const key = `${dateStr}|${[home, away].sort().join('|')}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      const isFirstHomeForTeam = isHome && !firstHomeByTeam.has(t.team);
+      if (isFirstHomeForTeam) firstHomeByTeam.set(t.team, true);
+
       matches.push({
         team: t,
         date: m.date,
         opponent: m.opponent,
         round: m.round,
-        isFirst: idx === 0, // seul le 1er a potentiellement des live odds
-        odds: idx === 0 ? getNextMatchOdds(t) : null,
+        isHome,
+        isFirstHome: isFirstHomeForTeam,
+        odds: isFirstHomeForTeam ? getNextMatchOdds(t) : null,
       });
     });
   }
   matches.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  // Pari recommande pour CE match (utilise la cote du match si dispo, sinon fallback ROI 3y)
+  // Pari recommande pour CE match (uniquement si domicile, car strat = pari sur l'equipe a domicile)
   function recoForMatch(m) {
+    if (!m.isHome) return null;
     if (m.odds) {
       const bucket = getBucket(m.odds);
       if (bucket) {
@@ -1631,19 +1650,25 @@ function renderPronosticWatchlist() {
     const roiCls = recoRoi === null || recoRoi === undefined
       ? 'roi-zero'
       : (recoRoi > 20 ? 'roi-strong' : (recoRoi >= 0 ? 'roi-pos' : 'roi-neg'));
-    const recoTxt = reco
-      ? `<div style="font-weight:700;color:var(--accent-2)">${MARKET_ICON[reco.key] || ''} ${escapeHtml(reco.label)}</div>
-         <div style="font-size:10px;color:var(--muted)"><span class="${roiCls}">${recoRoi == null ? '—' : (recoRoi >= 0 ? '+' : '') + recoRoi.toFixed(1) + '%'}</span> · n=${reco.n}${reco.source === '3y' ? ' · 3y' : ''}</div>`
-      : '<span class="roi-zero">—</span>';
+    const recoTxt = m.isHome
+      ? (reco
+          ? `<div style="font-weight:700;color:var(--accent-2)">${MARKET_ICON[reco.key] || ''} ${escapeHtml(reco.label)}</div>
+             <div style="font-size:10px;color:var(--muted)"><span class="${roiCls}">${recoRoi == null ? '—' : (recoRoi >= 0 ? '+' : '') + recoRoi.toFixed(1) + '%'}</span> · n=${reco.n}${reco.source === '3y' ? ' · 3y' : ''}</div>`
+          : '<span class="roi-zero">—</span>')
+      : '<span style="color:var(--muted);font-size:10px">déplacement</span>';
 
-    const liveBadge = m.isFirst && t.hasLiveOdds
+    const liveBadge = m.isFirstHome && t.hasLiveOdds
       ? ' <span style="font-size:9px;background:var(--green-bg);color:var(--green);padding:1px 4px;border-radius:3px;font-weight:700">LIVE</span>'
       : '';
+    const venueBadge = m.isHome
+      ? '<span style="font-size:9px;background:rgba(63,185,80,0.15);color:var(--green);padding:1px 5px;border-radius:3px;font-weight:700;margin-right:4px" title="Match a domicile">DOM</span>'
+      : '<span style="font-size:9px;background:rgba(248,81,73,0.12);color:var(--red);padding:1px 5px;border-radius:3px;font-weight:700;margin-right:4px" title="Match a l\'exterieur">EXT</span>';
     return `
-      <tr>
+      <tr style="${m.isHome ? '' : 'opacity: 0.85'}">
         <td><strong>${fmtDate(m.date)}</strong>${m.round ? `<br><span style="font-size:9px;color:var(--muted)">J${m.round}</span>` : ''}</td>
+        <td>${venueBadge}</td>
         <td><strong>${escapeHtml(t.team)}</strong>${t.isElite ? ' <span style="color:var(--gold)" title="Élite cette saison">⚡</span>' : ''}${liveBadge}</td>
-        <td>vs ${escapeHtml(m.opponent)}</td>
+        <td>${m.isHome ? 'vs' : '@'} ${escapeHtml(m.opponent)}</td>
         <td><span class="league-tag">${escapeHtml(t.leagueName || t.league)}</span></td>
         <td class="num">${m.odds ? m.odds.toFixed(2) : '<span class="roi-zero">—</span>'}</td>
         <td>${bucket ? `<span class="event-category-tag" title="${escapeAttr(BUCKET_TIP[bucket] || '')}">${BUCKET_LABEL[bucket]}</span>` : '<span class="roi-zero">—</span>'}</td>
@@ -1655,14 +1680,17 @@ function renderPronosticWatchlist() {
     ? `<p style="margin-top:10px;font-size:11px;color:var(--muted)">⏳ Pas de match domicile programmé dans les 60 jours pour : ${teamsWithoutFixtures.map(t => escapeHtml(t.team)).join(', ')}.</p>`
     : '';
 
+  const nHome = matches.filter(m => m.isHome).length;
+  const nAway = matches.length - nHome;
   container.innerHTML = `
     <div class="panel">
-      <h2>⭐ Pronostic Watchlist — ${matches.length} match${matches.length > 1 ? 's' : ''} à venir · ${teams.length} équipe${teams.length > 1 ? 's' : ''}</h2>
+      <h2>⭐ Pronostic Watchlist — ${matches.length} match${matches.length > 1 ? 's' : ''} à venir (${nHome} dom · ${nAway} ext) · ${teams.length} équipe${teams.length > 1 ? 's' : ''}</h2>
       <div class="table-wrapper" style="overflow-x:auto">
         <table>
           <thead>
             <tr>
               <th>Date</th>
+              <th>Lieu</th>
               <th>Équipe</th>
               <th>Adversaire</th>
               <th>Ligue</th>
@@ -1671,13 +1699,13 @@ function renderPronosticWatchlist() {
               <th>Pari recommandé</th>
             </tr>
           </thead>
-          <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px">Aucun match domicile programmé dans les 60 jours pour ta watchlist.</td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px">Aucun match programmé dans les 90 jours pour ta watchlist.</td></tr>'}</tbody>
         </table>
       </div>
       ${emptyRow}
       <p style="margin-top:14px;font-size:11px;color:var(--muted)">
-        Tous les matchs domicile des équipes ★ dans les 60 prochains jours, triés du plus proche au plus lointain.
-        Seul le tout premier match d'une équipe peut avoir une cote « 1 » live (via The Odds API, top 4 du classement global). Pour les autres : bucket indéterminé → reco fallback sur le ROI 3y agrégé du meilleur marché.
+        Tous les matchs (domicile + déplacement) des équipes ★ dans les 90 prochains jours, triés du plus proche au plus lointain. Les rencontres entre 2 équipes ★ ne sont affichées qu'une seule fois.
+        Seul le tout premier match domicile d'une équipe peut avoir une cote « 1 » live (Odds API, top 4 du classement global). Pari recommandé uniquement pour les matchs à domicile (strat = pari sur l'équipe à domicile).
       </p>
     </div>`;
 }
