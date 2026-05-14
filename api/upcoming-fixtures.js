@@ -13,7 +13,7 @@ const FIXTURE_LEAGUES = {
   "D1":  "bundesliga",
   "D2":  null,                // pas de feed JSON
   "SP1": "la-liga",
-  "SP2": null,                // pas de feed JSON (Segunda)
+  "SP2": null,                // pas de feed JSON (Segunda) -> fallback The Odds API
   "I1":  "serie-a",
   "I2":  null,
   "P1":  "primeira-liga",
@@ -21,6 +21,24 @@ const FIXTURE_LEAGUES = {
   "SC0": null,
   "SC1": null,
   "B1":  null,
+};
+
+// Codes football-data.co.uk -> sport keys The Odds API (fallback quand fixturedownload n'a pas de feed)
+const FB_TO_ODDS_SPORT = {
+  "F1":  "soccer_france_ligue_one",
+  "F2":  "soccer_france_ligue_two",
+  "E0":  "soccer_epl",
+  "E1":  "soccer_efl_champ",
+  "D1":  "soccer_germany_bundesliga",
+  "D2":  "soccer_germany_bundesliga2",
+  "SP1": "soccer_spain_la_liga",
+  "SP2": "soccer_spain_segunda_division",
+  "I1":  "soccer_italy_serie_a",
+  "I2":  "soccer_italy_serie_b",
+  "P1":  "soccer_portugal_primeira_liga",
+  "N1":  "soccer_netherlands_eredivisie",
+  "B1":  "soccer_belgium_first_div",
+  "SC0": "soccer_scotland_premiership",
 };
 
 // Aliases entre noms football-data.co.uk (utilises dans la watchlist du client)
@@ -151,6 +169,30 @@ async function fetchLeagueFixtures(fdCode, season) {
   }
 }
 
+// Fallback The Odds API (/events) pour les ligues sans feed fixturedownload.
+// Convertit la reponse au format fixturedownload (DateUtc/HomeTeam/AwayTeam/RoundNumber).
+async function fetchLeagueFixturesFromOddsApi(fdCode) {
+  const sportKey = FB_TO_ODDS_SPORT[fdCode];
+  if (!sportKey) return null;
+  const apiKey = process.env.ODDS_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const r = await fetch(`https://api.the-odds-api.com/v4/sports/${sportKey}/events?apiKey=${apiKey}`);
+    if (!r.ok) return null;
+    const events = await r.json();
+    if (!Array.isArray(events)) return null;
+    return events.map(e => ({
+      DateUtc: e.commence_time,  // ISO format, deja compatible
+      HomeTeam: e.home_team,
+      AwayTeam: e.away_team,
+      RoundNumber: null,
+      _source: "odds-api",
+    }));
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   const { teams = "", season = "2526", days = "10", includeAway = "false" } = req.query;
   const wantAway = includeAway === "true" || includeAway === "1";
@@ -177,9 +219,20 @@ export default async function handler(req, res) {
   const now = new Date();
 
   for (const [lg, teamList] of byLeague.entries()) {
-    const fixtures = await fetchLeagueFixtures(lg, season);
+    let fixtures = await fetchLeagueFixtures(lg, season);
+    let usedOddsApi = false;
+    // Fallback The Odds API quand fixturedownload n'a pas de feed pour cette ligue
     if (!fixtures || fixtures._unsupported) {
-      const errMsg = fixtures?._unsupported ? "ligue non supportee par fixturedownload" : "fixtures non dispo";
+      const oddsFixtures = await fetchLeagueFixturesFromOddsApi(lg);
+      if (oddsFixtures && oddsFixtures.length > 0) {
+        fixtures = oddsFixtures;
+        usedOddsApi = true;
+      }
+    }
+    if (!fixtures || fixtures._unsupported) {
+      const errMsg = fixtures?._unsupported
+        ? "ligue non supportee (fixturedownload + The Odds API)"
+        : "fixtures non dispo";
       for (const t of teamList) results.push({ team: t, league: lg, error: errMsg });
       continue;
     }
@@ -214,6 +267,7 @@ export default async function handler(req, res) {
       results.push({
         team: t,
         league: lg,
+        source: usedOddsApi ? "odds-api" : "fixturedownload",
         nextHome: homeUpcoming.length > 0 ? {
           date: homeUpcoming[0].DateUtc,
           opponent: homeUpcoming[0].AwayTeam,
