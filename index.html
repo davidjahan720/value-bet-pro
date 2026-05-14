@@ -651,8 +651,9 @@ function syncWatchlistToServer() {
 function toggleWatchlist(key) {
   if (WATCHLIST.has(key)) WATCHLIST.delete(key); else WATCHLIST.add(key);
   saveWatchlist();
-  // Force le refetch des fixtures pronostic la prochaine fois qu'on ouvre le tab
-  PRONOSTIC_FIXTURES_LOADED = false;
+  // Force le refetch des fixtures la prochaine fois qu'on en a besoin
+  WATCHLIST_FIXTURES_LOADED = false;
+  _watchlistFixturesPromise = null;
 }
 
 // Au demarrage : tente de recuperer la watchlist serveur, prend le plus complet
@@ -804,6 +805,29 @@ function getNextMatchOdds(t) {
 }
 
 function fmtNextMatch(t) {
+  // Mode watchlist : liste TOUS les matchs domicile a venir (max 6 pour eviter d'exploser la cellule)
+  if (typeof CURRENT_FILTER !== 'undefined' && CURRENT_FILTER === 'watchlist') {
+    const list = t.allHomeFixtures || [];
+    if (list.length > 0) {
+      const max = 6;
+      const items = list.slice(0, max).map((m, i) => {
+        const d = new Date(m.date);
+        const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' });
+        const liveBadge = i === 0 && t.hasLiveOdds && t.nextHomeFixture?.odds
+          ? ` <span style="font-size:8px;background:var(--green-bg);color:var(--green);padding:0 3px;border-radius:2px;font-weight:700">LIVE ${t.nextHomeFixture.odds.toFixed(2)}</span>`
+          : '';
+        return `<div style="font-size:11px;line-height:1.35"><strong>${dateStr}</strong>${liveBadge}<br><span style="font-size:10px;color:var(--muted)">vs ${escapeHtml(m.opponent)}</span></div>`;
+      }).join('');
+      const more = list.length > max ? `<div style="font-size:9px;color:var(--muted);margin-top:3px">+${list.length - max} autre${list.length - max > 1 ? 's' : ''}…</div>` : '';
+      return items + more;
+    }
+    // Pas de match domicile a venir
+    if (WATCHLIST_FIXTURES_LOADED) {
+      return `<div style="font-size:10px;color:var(--muted);font-style:italic">⛔ Plus de matchs domicile</div>`;
+    }
+    return `<div style="font-size:10px;color:var(--muted)">⏳ Chargement…</div>`;
+  }
+
   // 1) Live odds (The Odds API) - le plus precis
   if (t.nextHomeFixture && t.nextHomeFixture.source === "odds-api-live") {
     const f = t.nextHomeFixture;
@@ -897,6 +921,13 @@ function render() {
   // Met a jour le badge count sur le bouton watchlist
   const wlBtn = document.querySelector('.toggle-btn[data-filter="watchlist"]');
   if (wlBtn) wlBtn.textContent = `★ Ma watchlist (${WATCHLIST.size})`;
+
+  // Sur filtre watchlist : assurer le chargement des fixtures pour toute la watchlist
+  if (CURRENT_FILTER === 'watchlist' && WATCHLIST.size > 0 && !WATCHLIST_FIXTURES_LOADED) {
+    ensureWatchlistFixturesLoaded().then(() => {
+      if (CURRENT_FILTER === 'watchlist') render();
+    });
+  }
 
   // Render le panel de simulation watchlist quand on est sur ce filtre
   const simContainer = document.getElementById('watchlist-sim-container');
@@ -1517,7 +1548,42 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // ============================================================
 // Pronostic Watchlist — onglet dédié, format classement focus bucket
 // ============================================================
-let PRONOSTIC_FIXTURES_LOADED = false;
+let WATCHLIST_FIXTURES_LOADED = false;
+let _watchlistFixturesPromise = null;
+
+// Charge les fixtures (home + away, 90j) pour TOUTES les equipes watchlistees.
+// Utilise par le tab Pronostic ET par la colonne Next du classement quand filtre = watchlist.
+// Idempotent : appel multiple = 1 seule requete.
+async function ensureWatchlistFixturesLoaded() {
+  if (WATCHLIST_FIXTURES_LOADED) return;
+  if (_watchlistFixturesPromise) return _watchlistFixturesPromise;
+  if (!DATA?.teams) return;
+  const wlTeams = DATA.teams.filter(t => WATCHLIST.has(teamWatchKey(t)));
+  if (!wlTeams.length) { WATCHLIST_FIXTURES_LOADED = true; return; }
+
+  _watchlistFixturesPromise = (async () => {
+    try {
+      const param = wlTeams.map(t => `${t.team}|${t.league}`).join(',');
+      const r = await fetch(`/api/upcoming-fixtures?teams=${encodeURIComponent(param)}&days=90&season=2526&includeAway=true`);
+      if (r.ok) {
+        const j = await r.json();
+        const map = new Map();
+        for (const f of j.fixtures || []) {
+          map.set(`${f.team}|${f.league}`, f);
+        }
+        for (const t of DATA.teams) {
+          const f = map.get(teamWatchKey(t));
+          if (!f) continue;
+          t.allHomeFixtures = f.allUpcoming || [];
+          t.allMatches = f.allMatches || [];
+          if (!t.hasLiveOdds && f.nextHome) t.nextHomeFixture = f.nextHome;
+        }
+      }
+    } catch { /* silent */ }
+    WATCHLIST_FIXTURES_LOADED = true;
+  })();
+  return _watchlistFixturesPromise;
+}
 
 async function openPronosticTab() {
   if (!DATA?.teams) {
@@ -1526,34 +1592,8 @@ async function openPronosticTab() {
     return;
   }
   renderPronosticWatchlist();
-  // Charge les fixtures pour TOUTES les equipes watchlistees (besoin de allUpcoming,
-  // pas juste nextHome) — meme celles deja enrichies en live odds par loadData.
-  if (!PRONOSTIC_FIXTURES_LOADED) {
-    PRONOSTIC_FIXTURES_LOADED = true;
-    const wlTeams = DATA.teams.filter(t => WATCHLIST.has(teamWatchKey(t)));
-    if (wlTeams.length) {
-      try {
-        const param = wlTeams.map(t => `${t.team}|${t.league}`).join(',');
-        const r = await fetch(`/api/upcoming-fixtures?teams=${encodeURIComponent(param)}&days=90&season=2526&includeAway=true`);
-        if (r.ok) {
-          const j = await r.json();
-          const map = new Map();
-          for (const f of j.fixtures || []) {
-            map.set(`${f.team}|${f.league}`, f);
-          }
-          for (const t of DATA.teams) {
-            const f = map.get(teamWatchKey(t));
-            if (!f) continue;
-            t.allHomeFixtures = f.allUpcoming || [];
-            t.allMatches = f.allMatches || [];
-            // ne pas ecraser nextHomeFixture si on a deja les live odds (source plus riche)
-            if (!t.hasLiveOdds && f.nextHome) t.nextHomeFixture = f.nextHome;
-          }
-        }
-      } catch { /* silent */ }
-      renderPronosticWatchlist();
-    }
-  }
+  await ensureWatchlistFixturesLoaded();
+  renderPronosticWatchlist();
 }
 
 function renderPronosticWatchlist() {
