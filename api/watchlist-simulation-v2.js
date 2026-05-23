@@ -126,7 +126,7 @@ function pickBestMarketForBucket(teamRanking, bucket, roiThreshold, winRateThres
 export default async function handler(req, res) {
   try {
     const { teams: teamsParam, roiThreshold: rt = 25, winRateThreshold: wt = 30 } = req.query;
-    if (!teamsParam) return res.status(400).json({ error: "teams param required" });
+    if (!teamsParam || typeof teamsParam !== 'string') return res.status(400).json({ error: "teams param required and must be a string" });
     const roiThreshold = parseFloat(rt);
     const winRateThreshold = parseFloat(wt);
 
