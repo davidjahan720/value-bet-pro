@@ -1,3 +1,95 @@
+1 <!DOCTYPE html>
+    2 <html lang="fr">
+    3 <head>
+    4     <meta charset="UTF-8">
+    5     <title>Value Bet Pro - Sniper V2</title>
+    6     <style>
+    7         body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+    8         .config { background: #f4f4f4; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    9         .form-label { display: inline-block; width: 180px; }
+   10         button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+   11     </style>
+   12 </head>
+   13 <body>
+   14     <h1>Sniper V2 Configuration</h1>
+   15     <div class="config">
+   16         <label class="form-label">ROI Historique (%) :</label>
+   17         <select id="roi">
+   18             <option value="15">15%</option>
+   19             <option value="20">20%</option>
+   20             <option value="25" selected>25%</option>
+   21             <option value="30">30%</option>
+   22             <option value="35">35%</option>
+   23         </select><br><br>
+   24
+   25         <label class="form-label">Win Rate (%) :</label>
+   26         <select id="winrate">
+   27             <option value="15">15%</option>
+   28             <option value="20">20%</option>
+   29             <option value="25">25%</option>
+   30             <option value="30" selected>30%</option>
+   31             <option value="35">35%</option>
+   32         </select><br><br>
+   33
+   34         <label class="form-label">Mode de sélection :</label>
+   35         <input type="radio" id="modeManual" name="mode" value="manual" checked onchange="toggleMode()">
+   36         <label for="modeManual" style="width: auto;">Saisie manuelle</label>
+   37
+   38         <input type="radio" id="modeWatchlist" name="mode" value="watchlist" onchange="toggleMode()">
+   39         <label for="modeWatchlist" style="width: auto;">Watchlist complète</label>
+   40         <br><br>
+   41
+   42         <div id="manualInput">
+   43             <label class="form-label">Équipes (ex: Lens|F1) :</label>
+   44             <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1" style="width: 300px;">
+   45         </div>
+   46         <br>
+   47         <button id="runBtn" onclick="runSimulation()">Lancer la simulation</button>
+   48     </div>
+   49
+   50     <pre id="resultat">En attente...</pre>
+   51
+   52     <script>
+   53         function toggleMode() {
+   54             document.getElementById('manualInput').style.display = document.getElementById('modeManual').checked ?
+      'block' : 'none';
+   55         }
+   56
+   57         async function runSimulation() {
+   58             const roi = document.getElementById('roi').value;
+   59             const wr = document.getElementById('winrate').value;
+   60             let teams = "";
+   61
+   62             if (document.getElementById('modeWatchlist').checked) {
+   63                 try {
+   64                     const wl = await fetch('/api/watchlist-sync');
+   65                     const data = await wl.json();
+   66                     if(data.keys && data.keys.length > 0) {
+   67                         teams = data.keys.join(',');
+   68                     } else {
+   69                         alert('Watchlist vide ou erreur'); return;
+   70                     }
+   71                 } catch(e) { alert('Erreur chargement watchlist'); return; }
+   72             } else {
+   73                 teams = document.getElementById('teams').value;
+   74             }
+   75
+   76             if(!teams) { alert('Veuillez entrer ou charger des équipes'); return; }
+   77
+   78             const url = `/api/watchlist-simulation-v2?teams=${teams}&roiThreshold=${roi}&winRateThreshold=${wr}`;
+   79             document.getElementById('resultat').innerText = "Chargement...";
+   80
+   81             try {
+   82                 const res = await fetch(url);
+   83                 const data = await res.json();
+   84                 document.getElementById('resultat').innerText = JSON.stringify(data, null, 2);
+   85             } catch (e) {
+   86                 document.getElementById('resultat').innerText = "Erreur : " + e.message;
+   87             }
+   88         }
+   89     </script>
+   90 </body>
+   91 </html>
   1 <!DOCTYPE html>
     2 <html>
     3 <head>
