@@ -6,14 +6,14 @@
     <style>
         body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
         .config { background: #f4f4f4; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        label { display: inline-block; width: 180px; }
+        .form-label { display: inline-block; width: 180px; }
         button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
     </style>
 </head>
 <body>
     <h1>Sniper V2 Configuration</h1>
     <div class="config">
-        <label>ROI Historique (%) :</label>
+        <label class="form-label">ROI Historique (%) :</label>
         <select id="roi">
             <option value="15">15%</option>
             <option value="20">20%</option>
@@ -22,7 +22,7 @@
             <option value="35">35%</option>
         </select><br><br>
         
-        <label>Win Rate (%) :</label>
+        <label class="form-label">Win Rate (%) :</label>
         <select id="winrate">
             <option value="15">15%</option>
             <option value="20">20%</option>
@@ -31,15 +31,16 @@
             <option value="35">35%</option>
         </select><br><br>
         
-        <label>Mode de sélection :</label>
+        <label class="form-label">Mode de sélection :</label>
         <input type="radio" id="modeManual" name="mode" value="manual" checked onchange="toggleMode()">
-        <label style="width: auto;" for="modeManual">Saisie manuelle</label>
+        <label for="modeManual" style="width: auto;">Saisie manuelle</label>
+        
         <input type="radio" id="modeWatchlist" name="mode" value="watchlist" onchange="toggleMode()">
-        <label style="width: auto;" for="modeWatchlist">Watchlist complète</label>
+        <label for="modeWatchlist" style="width: auto;">Watchlist complète</label>
         <br><br>
         
         <div id="manualInput">
-            <label>Équipes (ex: Lens|F1) :</label>
+            <label class="form-label">Équipes (ex: Lens|F1) :</label>
             <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1" style="width: 300px;">
         </div>
         <br>
