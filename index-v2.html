@@ -6,7 +6,7 @@
     <style>
         body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
         .config { background: #f4f4f4; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        label { display: inline-block; width: 150px; }
+        label { display: inline-block; width: 180px; }
         button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
     </style>
 </head>
@@ -31,21 +31,44 @@
             <option value="35">35%</option>
         </select><br><br>
         
-        <label>Équipes (ex: Lens|F1) :</label>
-        <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1" style="width: 300px;">
+        <label>Mode de sélection :</label>
+        <input type="radio" id="modeManual" name="mode" value="manual" checked onchange="toggleMode()">
+        <label style="width: auto;" for="modeManual">Saisie manuelle</label>
+        <input type="radio" id="modeWatchlist" name="mode" value="watchlist" onchange="toggleMode()">
+        <label style="width: auto;" for="modeWatchlist">Watchlist complète</label>
         <br><br>
+        
+        <div id="manualInput">
+            <label>Équipes (ex: Lens|F1) :</label>
+            <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1" style="width: 300px;">
+        </div>
+        <br>
         <button onclick="runSimulation()">Lancer la simulation</button>
     </div>
 
     <pre id="resultat">En attente...</pre>
 
     <script>
+        function toggleMode() {
+            document.getElementById('manualInput').style.display = document.getElementById('modeManual').checked ? 'block' : 'none';
+        }
+
         async function runSimulation() {
             const roi = document.getElementById('roi').value;
             const wr = document.getElementById('winrate').value;
-            const teams = document.getElementById('teams').value;
+            let teams = "";
+
+            if (document.getElementById('modeWatchlist').checked) {
+                try {
+                    const wl = await fetch('/api/watchlist-sync');
+                    const data = await wl.json();
+                    teams = data.keys.join(',');
+                } catch(e) { alert('Erreur chargement watchlist'); return; }
+            } else {
+                teams = document.getElementById('teams').value;
+            }
             
-            if(!teams) { alert('Veuillez entrer au moins une équipe'); return; }
+            if(!teams) { alert('Veuillez entrer ou charger des équipes'); return; }
 
             const url = `/api/watchlist-simulation-v2?teams=${teams}&roiThreshold=${roi}&winRateThreshold=${wr}`;
             document.getElementById('resultat').innerText = "Chargement...";
