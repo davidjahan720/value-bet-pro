@@ -1,74 +1,39 @@
-  1 <!DOCTYPE html>
+1 <!DOCTYPE html>
     2 <html lang="fr">
     3 <head>
     4     <meta charset="UTF-8">
-    5     <title>Value Bet Pro - Sniper V2</title>
+    5     <title>Sniper V2</title>
     6 </head>
     7 <body>
-    8     <h1>Sniper V2 Configuration</h1>
-    9     <div>
-   10         <label>ROI Historique (%) :</label>
-   11         <select id="roi">
-   12             <option value="15">15%</option>
-   13             <option value="20">20%</option>
-   14             <option value="25" selected>25%</option>
-   15             <option value="30">30%</option>
-   16             <option value="35">35%</option>
-   17         </select>
-   18         <br><br>
-   19         <label>Win Rate (%) :</label>
-   20         <select id="winrate">
-   21             <option value="15">15%</option>
-   22             <option value="20">20%</option>
-   23             <option value="25">25%</option>
-   24             <option value="30" selected>30%</option>
-   25             <option value="35">35%</option>
-   26         </select>
-   27         <br><br>
-   28         <input type="radio" id="modeManual" name="mode" value="manual" checked> <label>Saisie manuelle</label>
-   29         <input type="radio" id="modeWatchlist" name="mode" value="watchlist"> <label>Watchlist complète</label>
-   30         <br><br>
-   31         <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1" style="width: 300px;">
-   32         <br><br>
-   33         <button id="runBtn">Lancer la simulation</button>
-   34     </div>
-   35     <pre id="resultat">En attente...</pre>
-   36     <script>
-   37         document.getElementById('runBtn').addEventListener('click', async function() {
-   38             const roi = document.getElementById('roi').value;
-   39             const wr = document.getElementById('winrate').value;
-   40             let teams = document.getElementById('teams').value;
-   41
-   42             document.getElementById('resultat').innerText = "Chargement...";
-   43
-   44             if (document.getElementById('modeWatchlist').checked) {
-   45                 try {
-   46                     const wl = await fetch('/api/watchlist-sync');
-   47                     const data = await wl.json();
-   48                     if(data.keys && data.keys.length > 0) {
-   49                         teams = data.keys.join(',');
-   50                     } else {
-   51                         document.getElementById('resultat').innerText = "Erreur: Watchlist vide";
-   52                         return;
-   53                     }
-   54                 } catch(e) {
-   55                     document.getElementById('resultat').innerText = "Erreur chargement watchlist";
-   56                     return;
-   57                 }
-   58             }
-   59
-   60             if(!teams) { alert('Veuillez entrer ou charger des équipes'); return; }
-   61
-   62             try {
-   63                 const url =
-      `/api/watchlist-simulation-v2?teams=${teams}&roiThreshold=${roi}&winRateThreshold=${wr}`;
-   64                 const res = await fetch(url);
-   65                 const data = await res.json();
-   66                 document.getElementById('resultat').innerText = JSON.stringify(data, null, 2);
-   67             } catch (e) {
-   68                 document.getElementById('resultat').innerText = "Erreur : " + e.message;
-   69             }
-   70         });
-   71     </script>
-   72 </body>
-   73 </html>
+    8     <h1>Configuration</h1>
+    9     <select id="roi"><option value="25" selected>ROI 25%</option></select>
+   10     <select id="winrate"><option value="30" selected>WR 30%</option></select>
+   11     <br><br>
+   12     <input type="radio" id="modeManual" name="mode" value="manual" checked> <label>Manuel</label>
+   13     <input type="radio" id="modeWatchlist" name="mode" value="watchlist"> <label>Watchlist</label>
+   14     <br><br>
+   15     <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1">
+   16     <button id="runBtn">Lancer</button>
+   17     <pre id="resultat">En attente...</pre>
+   18
+   19     <script>
+   20         document.getElementById('runBtn').onclick = async () => {
+   21             const roi = document.getElementById('roi').value;
+   22             const wr = document.getElementById('winrate').value;
+   23             let teams = document.getElementById('teams').value;
+   24             document.getElementById('resultat').innerText = "Chargement...";
+   25
+   26             if (document.getElementById('modeWatchlist').checked) {
+   27                 const wl = await fetch('/api/watchlist-sync');
+   28                 const data = await wl.json();
+   29                 teams = data.keys.join(',');
+   30             }
+   31
+   32             const res = await
+      fetch(`/api/watchlist-simulation-v2?teams=${teams}&roiThreshold=${roi}&winRateThreshold=${wr}`);
+   33             const data = await res.json();
+   34             document.getElementById('resultat').innerText = JSON.stringify(data, null, 2);
+   35         };
+   36     </script>
+   37 </body>
+   38 </html>
