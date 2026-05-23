@@ -120,6 +120,7 @@ function computeBetResult(row, marketKey) {
 }
 
 // Pour une equipe + bucket, trouve le meilleur marche selon ses stats historiques (rankings)
+// Strategie v2 : Sniper (ROI hist >= 25% ET Win Rate > 30%)
 function pickBestMarketForBucket(teamRanking, bucket) {
   if (!teamRanking) return null;
   let best = null;
@@ -128,8 +129,14 @@ function pickBestMarketForBucket(teamRanking, bucket) {
     if (!m) continue;
     const bk = m.buckets?.[bucket];
     if (!bk || bk.n < 20 || bk.roi === null) continue;
+
+    // Filtres v2
+    const winRate = (bk.w / bk.n);
+    if (bk.roi < 25) continue;
+    if (winRate <= 0.30) continue;
+
     if (!best || bk.roi > best.roi) {
-      best = { key: k, label: MARKET_SHORT[k], roi: bk.roi, n: bk.n };
+      best = { key: k, label: MARKET_SHORT[k], roi: bk.roi, n: bk.n, winRate };
     }
   }
   return best;
@@ -232,6 +239,17 @@ export default async function handler(req, res) {
         const result = computeBetResult(row, bestMarket.key);
         if (!result) continue;
 
+        // --- Logique Sniper v2 ---
+        // On ne joue que si on a un bestMarket v2 (ROI >= 40, WR > 50)
+        // ET si c'est une Value (cote > 1/winRate)
+        if (bestMarket.winRate) {
+          const valueThreshold = 1 / bestMarket.winRate;
+          if (result.odds <= valueThreshold) continue; // Pas de value
+        } else {
+          // Si on est en fallback (pas de bestMarket v2 trouve), on ne joue pas en v2
+          continue; 
+        }
+
         const d = parseDate(row.Date);
         bets.push({
           dateIso: d ? d.toISOString().slice(0,10) : null,
@@ -249,6 +267,7 @@ export default async function handler(req, res) {
           market: bestMarket.key,
           marketLabel: bestMarket.label,
           marketRoiHist: bestMarket.roi !== undefined ? +bestMarket.roi.toFixed(2) : null,
+          marketWinRateHist: bestMarket.winRate !== undefined ? +bestMarket.winRate.toFixed(3) : null,
           marketN: bestMarket.n || null,
           fallback,
           cote: +result.odds.toFixed(2),
