@@ -6,6 +6,7 @@
     <style>
         body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
         .config { background: #f4f4f4; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .form-label { display: inline-block; width: 180px; }
         label { display: inline-block; width: 150px; }
         button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
     </style>
@@ -13,6 +14,7 @@
 <body>
     <h1>Sniper V2 Configuration</h1>
     <div class="config">
+        <label class="form-label">ROI Historique (%) :</label>
         <label>ROI Historique (%) :</label>
         <select id="roi">
             <option value="15">15%</option>
@@ -22,6 +24,7 @@
             <option value="35">35%</option>
         </select><br><br>
         
+        <label class="form-label">Win Rate (%) :</label>
         <label>Win Rate (%) :</label>
         <select id="winrate">
             <option value="15">15%</option>
@@ -31,6 +34,19 @@
             <option value="35">35%</option>
         </select><br><br>
         
+        <label class="form-label">Mode de sélection :</label>
+        <input type="radio" id="modeManual" name="mode" value="manual" checked onchange="toggleMode()">
+        <label for="modeManual" style="width: auto;">Saisie manuelle</label>
+        
+        <input type="radio" id="modeWatchlist" name="mode" value="watchlist" onchange="toggleMode()">
+        <label for="modeWatchlist" style="width: auto;">Watchlist complète</label>
+        <br><br>
+        
+        <div id="manualInput">
+            <label class="form-label">Équipes (ex: Lens|F1) :</label>
+            <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1" style="width: 300px;">
+        </div>
+        <br>
         <label>Équipes (ex: Lens|F1) :</label>
         <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1" style="width: 300px;">
         <br><br>
@@ -40,6 +56,26 @@
     <pre id="resultat">En attente...</pre>
 
     <script>
+        function toggleMode() {
+            document.getElementById('manualInput').style.display = document.getElementById('modeManual').checked ? 'block' : 'none';
+        }
+
+        async function runSimulation() {
+            const roi = document.getElementById('roi').value;
+            const wr = document.getElementById('winrate').value;
+            let teams = "";
+
+            if (document.getElementById('modeWatchlist').checked) {
+                try {
+                    const wl = await fetch('/api/watchlist-sync');
+                    const data = await wl.json();
+                    teams = data.keys.join(',');
+                } catch(e) { alert('Erreur chargement watchlist'); return; }
+            } else {
+                teams = document.getElementById('teams').value;
+            }
+            
+            if(!teams) { alert('Veuillez entrer ou charger des équipes'); return; }
         async function runSimulation() {
             const roi = document.getElementById('roi').value;
             const wr = document.getElementById('winrate').value;
