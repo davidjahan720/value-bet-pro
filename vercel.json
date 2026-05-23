@@ -3,6 +3,9 @@
     "api/team-rankings.js": {
       "maxDuration": 60
     },
+    "api/watchlist-simulation-v2.js": {
+    "maxDuration": 30
+     }, 
     "api/upcoming-fixtures.js": {
       "maxDuration": 15
     },
