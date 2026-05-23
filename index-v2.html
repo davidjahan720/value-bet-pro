@@ -7,7 +7,10 @@
         body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
         .config { background: #f4f4f4; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
         .form-label { display: inline-block; width: 180px; }
+<<<<<<< HEAD
+=======
         label { display: inline-block; width: 150px; }
+>>>>>>> cf41098598cba2416c9e1f91ff3cc8aadf44cd08
         button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
     </style>
 </head>
@@ -15,7 +18,10 @@
     <h1>Sniper V2 Configuration</h1>
     <div class="config">
         <label class="form-label">ROI Historique (%) :</label>
+<<<<<<< HEAD
+=======
         <label>ROI Historique (%) :</label>
+>>>>>>> cf41098598cba2416c9e1f91ff3cc8aadf44cd08
         <select id="roi">
             <option value="15">15%</option>
             <option value="20">20%</option>
@@ -25,7 +31,10 @@
         </select><br><br>
         
         <label class="form-label">Win Rate (%) :</label>
+<<<<<<< HEAD
+=======
         <label>Win Rate (%) :</label>
+>>>>>>> cf41098598cba2416c9e1f91ff3cc8aadf44cd08
         <select id="winrate">
             <option value="15">15%</option>
             <option value="20">20%</option>
@@ -40,6 +49,8 @@
         
         <input type="radio" id="modeWatchlist" name="mode" value="watchlist" onchange="toggleMode()">
         <label for="modeWatchlist" style="width: auto;">Watchlist complète</label>
+<<<<<<< HEAD
+=======
         <br><br>
         
         <div id="manualInput">
@@ -49,8 +60,15 @@
         <br>
         <label>Équipes (ex: Lens|F1) :</label>
         <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1" style="width: 300px;">
+>>>>>>> cf41098598cba2416c9e1f91ff3cc8aadf44cd08
         <br><br>
-        <button onclick="runSimulation()">Lancer la simulation</button>
+        
+        <div id="manualInput">
+            <label class="form-label">Équipes (ex: Lens|F1) :</label>
+            <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1" style="width: 300px;">
+        </div>
+        <br>
+        <button id="runBtn" onclick="runSimulation()">Lancer la simulation</button>
     </div>
 
     <pre id="resultat">En attente...</pre>
@@ -60,6 +78,8 @@
             document.getElementById('manualInput').style.display = document.getElementById('modeManual').checked ? 'block' : 'none';
         }
 
+<<<<<<< HEAD
+=======
         async function runSimulation() {
             const roi = document.getElementById('roi').value;
             const wr = document.getElementById('winrate').value;
@@ -76,12 +96,27 @@
             }
             
             if(!teams) { alert('Veuillez entrer ou charger des équipes'); return; }
+>>>>>>> cf41098598cba2416c9e1f91ff3cc8aadf44cd08
         async function runSimulation() {
             const roi = document.getElementById('roi').value;
             const wr = document.getElementById('winrate').value;
-            const teams = document.getElementById('teams').value;
+            let teams = "";
+
+            if (document.getElementById('modeWatchlist').checked) {
+                try {
+                    const wl = await fetch('/api/watchlist-sync');
+                    const data = await wl.json();
+                    if(data.keys && data.keys.length > 0) {
+                        teams = data.keys.join(',');
+                    } else {
+                        alert('Watchlist vide ou erreur'); return;
+                    }
+                } catch(e) { alert('Erreur chargement watchlist'); return; }
+            } else {
+                teams = document.getElementById('teams').value;
+            }
             
-            if(!teams) { alert('Veuillez entrer au moins une équipe'); return; }
+            if(!teams) { alert('Veuillez entrer ou charger des équipes'); return; }
 
             const url = `/api/watchlist-simulation-v2?teams=${teams}&roiThreshold=${roi}&winRateThreshold=${wr}`;
             document.getElementById('resultat').innerText = "Chargement...";
