@@ -91,50 +91,82 @@
    90 </body>
    91 </html>
   1 <!DOCTYPE html>
-    2 <html>
+    2 <html lang="fr">
     3 <head>
     4     <meta charset="UTF-8">
-    5     <title>Sniper V2</title>
+    5     <title>Value Bet Pro - Sniper V2</title>
     6 </head>
     7 <body>
     8     <h1>Sniper V2 Configuration</h1>
     9     <div>
-   10         <select id="roi"><option value="25">25% ROI</option></select>
-   11         <select id="winrate"><option value="30">30% WR</option></select>
-   12         <br><br>
-   13         <input type="radio" id="modeManual" name="mode" value="manual" checked> <label>Saisie manuelle</label>
-   14         <input type="radio" id="modeWatchlist" name="mode" value="watchlist"> <label>Watchlist</label>
-   15         <br><br>
-   16         <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1">
-   17         <br><br>
-   18         <button id="runBtn">Lancer la simulation</button>
-   19     </div>
-   20     <pre id="resultat">En attente...</pre>
-   21
-   22     <script>
-   23         document.getElementById('runBtn').addEventListener('click', async function() {
-   24             try {
-   25                 const roi = document.getElementById('roi').value;
-   26                 const wr = document.getElementById('winrate').value;
-   27                 let teams = document.getElementById('teams').value;
-   28
-   29                 if (document.getElementById('modeWatchlist').checked) {
-   30                     const wl = await fetch('/api/watchlist-sync');
-   31                     const data = await wl.json();
-   32                     teams = data.keys.join(',');
-   33                 }
-   34
-   35                 if(!teams) { alert('Entrez des équipes'); return; }
+   10         <label>ROI Historique (%) :</label>
+   11         <select id="roi">
+   12             <option value="15">15%</option>
+   13             <option value="20">20%</option>
+   14             <option value="25" selected>25%</option>
+   15             <option value="30">30%</option>
+   16             <option value="35">35%</option>
+   17         </select>
+   18         <br><br>
+   19
+   20         <label>Win Rate (%) :</label>
+   21         <select id="winrate">
+   22             <option value="15">15%</option>
+   23             <option value="20">20%</option>
+   24             <option value="25">25%</option>
+   25             <option value="30" selected>30%</option>
+   26             <option value="35">35%</option>
+   27         </select>
+   28         <br><br>
+   29
+   30         <input type="radio" id="modeManual" name="mode" value="manual" checked> <label>Saisie manuelle</label>
+   31         <input type="radio" id="modeWatchlist" name="mode" value="watchlist"> <label>Watchlist complète</label>
+   32         <br><br>
+   33
+   34         <input type="text" id="teams" placeholder="Lens|F1,Mallorca|SP1" style="width: 300px;">
+   35         <br><br>
    36
-   37                 document.getElementById('resultat').innerText = "Chargement...";
-   38                 const res = await
-      fetch(`/api/watchlist-simulation-v2?teams=${teams}&roiThreshold=${roi}&winRateThreshold=${wr}`);
-   39                 const data = await res.json();
-   40                 document.getElementById('resultat').innerText = JSON.stringify(data, null, 2);
-   41             } catch (e) {
-   42                 document.getElementById('resultat').innerText = "Erreur : " + e.message;
-   43             }
-   44         });
-   45     </script>
-   46 </body>
-   47 </html>
+   37         <button id="runBtn">Lancer la simulation</button>
+   38     </div>
+   39
+   40     <pre id="resultat">En attente...</pre>
+   41
+   42     <script>
+   43         document.getElementById('runBtn').addEventListener('click', async function() {
+   44             const roi = document.getElementById('roi').value;
+   45             const wr = document.getElementById('winrate').value;
+   46             let teams = document.getElementById('teams').value;
+   47
+   48             document.getElementById('resultat').innerText = "Chargement...";
+   49
+   50             if (document.getElementById('modeWatchlist').checked) {
+   51                 try {
+   52                     const wl = await fetch('/api/watchlist-sync');
+   53                     const data = await wl.json();
+   54                     if(data.keys && data.keys.length > 0) {
+   55                         teams = data.keys.join(',');
+   56                     } else {
+   57                         document.getElementById('resultat').innerText = "Erreur: Watchlist vide";
+   58                         return;
+   59                     }
+   60                 } catch(e) {
+   61                     document.getElementById('resultat').innerText = "Erreur chargement watchlist";
+   62                     return;
+   63                 }
+   64             }
+   65
+   66             if(!teams) { alert('Veuillez entrer ou charger des équipes'); return; }
+   67
+   68             try {
+   69                 const url =
+      `/api/watchlist-simulation-v2?teams=${teams}&roiThreshold=${roi}&winRateThreshold=${wr}`;
+   70                 const res = await fetch(url);
+   71                 const data = await res.json();
+   72                 document.getElementById('resultat').innerText = JSON.stringify(data, null, 2);
+   73             } catch (e) {
+   74                 document.getElementById('resultat').innerText = "Erreur : " + e.message;
+   75             }
+   76         });
+   77     </script>
+   78 </body>
+   79 </html>
