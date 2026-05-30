@@ -395,7 +395,8 @@ export default async function handler(req, res) {
       }
 
       // Filtre Tier 1 base sur le marche "win" (pour rester comparable au projet d'origine)
-      if (bk_n_win < 60) continue;
+      // Seuil abaisse a 50 (3 saisons x ~17 matchs dom) pour inclure les equipes promues recentes
+      if (bk_n_win < 50) continue;
       if (markets.win.roi_5y === null) continue;
 
       const isTier1 = (markets.win.roi_5y >= 5)
