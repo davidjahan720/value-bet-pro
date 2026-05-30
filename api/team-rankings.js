@@ -25,6 +25,7 @@ const LEAGUES = [
   { code: "SC0", name: "Premiership ECO",  tier: "D1" },
   { code: "SC1", name: "Championship ECO", tier: "D2" },
   { code: "B1",  name: "Pro League BEL",   tier: "D1" },
+  { code: "G1",  name: "Super League GRE", tier: "D1" },
 ];
 
 const SEASONS = ["2021", "2122", "2223", "2324", "2425", "2526", "2627"];
