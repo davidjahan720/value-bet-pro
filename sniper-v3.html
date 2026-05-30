@@ -1,4 +1,4 @@
-  1 <!DOCTYPE html>
+   1 <!DOCTYPE html>
     2 <html lang="fr">
     3 <head>
     4     <meta charset="UTF-8">
@@ -38,32 +38,37 @@
    38             const roi = document.getElementById('roi').value;
    39             const wr = document.getElementById('winrate').value;
    40             let teams = document.getElementById('teams').value;
-   41             document.getElementById('resultat').innerText = "Chargement...";
-   42             if (document.getElementById('modeWatchlist').checked) {
-   43                 try {
-   44                     const wl = await fetch('/api/watchlist-sync');
-   45                     const data = await wl.json();
-   46                     if(data.keys && data.keys.length > 0) {
-   47                         teams = data.keys.join(',');
-   48                     } else {
-   49                         document.getElementById('resultat').innerText = "Erreur: Watchlist vide";
-   50                         return;
-   51                     }
-   52                 } catch(e) {
-   53                     document.getElementById('resultat').innerText = "Erreur chargement watchlist";
-   54                     return;
-   55                 }
-   56             }
-   57             if(!teams) { alert('Veuillez entrer ou charger des équipes'); return; }
-   58             try {
-   59                 const res = await
-      fetch(`/api/watchlist-simulation-v2?teams=${teams}&roiThreshold=${roi}&winRateThreshold=${wr}`);
-   60                 const data = await res.json();
-   61                 document.getElementById('resultat').innerText = JSON.stringify(data, null, 2);
-   62             } catch (e) {
-   63                 document.getElementById('resultat').innerText = "Erreur : " + e.message;
-   64             }
-   65         });
-   66     </script>
-   67 </body>
-   68 </html>
+   41
+   42             document.getElementById('resultat').innerText = "Chargement...";
+   43
+   44             if (document.getElementById('modeWatchlist').checked) {
+   45                 try {
+   46                     const wl = await fetch('/api/watchlist-sync');
+   47                     const data = await wl.json();
+   48                     if(data.keys && data.keys.length > 0) {
+   49                         teams = data.keys.join(',');
+   50                     } else {
+   51                         document.getElementById('resultat').innerText = "Erreur: Watchlist vide";
+   52                         return;
+   53                     }
+   54                 } catch(e) {
+   55                     document.getElementById('resultat').innerText = "Erreur chargement watchlist";
+   56                     return;
+   57                 }
+   58             }
+   59
+   60             if(!teams) { alert('Veuillez entrer ou charger des équipes'); return; }
+   61
+   62             try {
+   63                 const url =
+      `/api/watchlist-simulation-v2?teams=${teams}&roiThreshold=${roi}&winRateThreshold=${wr}`;
+   64                 const res = await fetch(url);
+   65                 const data = await res.json();
+   66                 document.getElementById('resultat').innerText = JSON.stringify(data, null, 2);
+   67             } catch (e) {
+   68                 document.getElementById('resultat').innerText = "Erreur : " + e.message;
+   69             }
+   70         });
+   71     </script>
+   72 </body>
+   73 </html>
