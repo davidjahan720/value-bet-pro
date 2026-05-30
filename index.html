@@ -1750,10 +1750,11 @@ let WL_SIM_DATA = null;
 let WL_SIM_VIEW = 'recent'; // 'completed' = 23-24+24-25, 'recent' = 24-25+25-26, 'current' = 25-26, 'upcoming' = 26-27
 
 const WL_SIM_VIEWS = {
-  completed:  { seasons: ['2324', '2425'],         label: '23-24 + 24-25',       period: 'saisons 23-24 + 24-25' },
-  recent:     { seasons: ['2425', '2526'],         label: '24-25 + 25-26',       period: 'saisons 24-25 + 25-26' },
-  current:    { seasons: ['2526'],                 label: 'En cours (25-26)',     period: 'saison 25-26 en cours' },
-  upcoming:   { seasons: ['2627'],                 label: 'À venir (26-27)',      period: 'saison 26-27 à venir' },
+  completed:  { seasons: ['2324', '2425'],                 label: '23-24 + 24-25',              period: 'saisons 23-24 + 24-25' },
+  recent:     { seasons: ['2425', '2526'],                 label: '24-25 + 25-26',              period: 'saisons 24-25 + 25-26' },
+  last3:      { seasons: ['2324', '2425', '2526'],         label: '3 saisons (23→26)',           period: 'saisons 23-24 + 24-25 + 25-26' },
+  current:    { seasons: ['2526'],                         label: 'En cours (25-26)',            period: 'saison 25-26 en cours' },
+  upcoming:   { seasons: ['2627'],                         label: 'À venir (26-27)',             period: 'saison 26-27 à venir' },
 };
 
 function setWatchlistSimView(view) {
@@ -1905,7 +1906,7 @@ function renderWatchlistSimulation(data, wlNum = 1) {
   };
   const seasonToggle = `
     <div class="toggle-group" style="margin-bottom: 12px; flex-wrap: wrap;">
-      ${['completed', 'recent', 'current', 'upcoming'].map(k => {
+      ${['completed', 'recent', 'last3', 'current', 'upcoming'].map(k => {
         const n = countFor(k);
         const isUpcomingEmpty = k === 'upcoming' && n === 0;
         const tip = isUpcomingEmpty ? 'Saison 26-27 demarre en aout 2026 — aucun match joue pour le moment' : '';
