@@ -1831,6 +1831,73 @@ function renderWatchlistSimulation(data) {
       </table>
     </div>`;
 
+  // Historique par equipe — sections expandables (<details>) avec matchs par saison
+  const SEASON_SHORT = { '2324':'23-24', '2425':'24-25', '2526':'25-26', '2627':'26-27' };
+  const perTeamMap = new Map();
+  for (const b of bets) {
+    const key = `${b.team}|${b.league}`;
+    if (!perTeamMap.has(key)) perTeamMap.set(key, { team: b.team, league: b.league, bets: [], n: 0, wins: 0, stake: 0, profit: 0 });
+    const p = perTeamMap.get(key);
+    p.bets.push(b);
+    p.n++;
+    if (b.won) p.wins++;
+    p.stake += (b.stake || 1);
+    p.profit += b.profit;
+  }
+  const perTeamDetailsHtml = [...perTeamMap.values()].map(p => {
+    const roi = p.stake > 0 ? (p.profit / p.stake * 100) : 0;
+    const roiCls = roi >= 10 ? 'roi-strong' : (roi >= 0 ? 'roi-pos' : 'roi-neg');
+    const profCls = p.profit >= 0 ? 'roi-pos' : 'roi-neg';
+    const bySeason = {};
+    for (const b of p.bets) {
+      if (!bySeason[b.season]) bySeason[b.season] = [];
+      bySeason[b.season].push(b);
+    }
+    const seasonBlocks = Object.entries(bySeason).sort(([a],[b]) => a.localeCompare(b)).map(([seas, matches]) => {
+      const slabel = SEASON_SHORT[seas] || seas;
+      const matchRows = matches.map(b => {
+        const histInfo = b.marketRoiHist !== null
+          ? ` <span style="font-size:9px;color:var(--muted)">(${b.marketRoiHist >= 0 ? '+' : ''}${b.marketRoiHist}%, n=${b.marketN})</span>`
+          : (b.fallback ? ` <span style="font-size:9px;color:var(--muted)">(fallback)</span>` : '');
+        const crossDivTag = b.crossDivision
+          ? ` <span style="font-size:9px;color:var(--accent);font-weight:700" title="Changement de division">↗${escapeHtml(b.league)}</span>` : '';
+        return `<tr class="${b.won ? 'won' : 'lost'}">
+          <td style="font-family:monospace">${escapeHtml(b.dateLabel || '')}</td>
+          <td>vs ${escapeHtml(b.opponent)}${crossDivTag}</td>
+          <td><span class="event-category-tag" title="${escapeAttr(BUCKET_TIP[b.bucket] || '')}">${b.bucketLabel}</span></td>
+          <td class="num">${b.oddsH.toFixed(2)}</td>
+          <td><strong style="color:var(--accent-2)">${escapeHtml(b.marketLabel)}</strong>${histInfo}</td>
+          <td class="num">${b.cote.toFixed(2)}</td>
+          <td style="font-family:monospace">${b.score}</td>
+          <td><span class="wl-sim-result-badge ${b.won ? 'won' : 'lost'}">${b.won ? '✓ G' : '✗ P'}</span></td>
+          <td class="num"><strong class="${b.won ? 'roi-pos' : 'roi-neg'}">${b.profit >= 0 ? '+' : ''}${b.profit.toFixed(2)} €</strong></td>
+        </tr>`;
+      }).join('');
+      return `<div style="margin-top:12px">
+        <h4 style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent)">${slabel} · ${matches.length} matchs</h4>
+        <div style="overflow-x:auto"><table class="wl-sim-table">
+          <thead><tr>
+            <th>Date</th><th>Adversaire</th><th>Bucket</th>
+            <th class="num">Cote 1</th><th>Marché</th><th class="num">Cote pari</th>
+            <th>Score</th><th>Résultat</th><th class="num">P&amp;L</th>
+          </tr></thead>
+          <tbody>${matchRows}</tbody>
+        </table></div>
+      </div>`;
+    }).join('');
+    return `<details class="betlog-team" style="margin-bottom:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:12px">
+      <summary style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-weight:700;font-size:13px">${escapeHtml(p.team)} <span class="league-tag" style="font-size:10px">${escapeHtml(p.league)}</span> <span style="font-size:11px;color:var(--muted)">· ${p.n} matchs</span></span>
+        <span style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px">
+          <span>V/D : <span style="color:var(--green)">${p.wins}</span>/<span style="color:var(--red)">${p.n - p.wins}</span></span>
+          <span class="${profCls}">${p.profit >= 0 ? '+' : ''}${p.profit.toFixed(2)} €</span>
+          <span class="${roiCls}">ROI ${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%</span>
+        </span>
+      </summary>
+      <div style="margin-top:10px">${seasonBlocks}</div>
+    </details>`;
+  }).join('');
+
   // Bet log — du plus recent au plus ancien
   const rows = bets.slice().reverse().map(b => {
     const cumCls = b.cumProfit >= 0 ? 'roi-pos' : 'roi-neg';
@@ -1862,6 +1929,10 @@ function renderWatchlistSimulation(data) {
       ${seasonToggle}
       ${recap}
       ${teamTableHtml}
+      ${perTeamDetailsHtml ? `
+      <h3 style="margin:20px 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted)">Historique par équipe <span style="font-size:10px;font-weight:400">(cliquer pour déplier)</span></h3>
+      ${perTeamDetailsHtml}` : ''}
+      <h3 style="margin:20px 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted)">Tous les matchs — vue confondue</h3>
       <p style="font-size:11px;color:var(--muted);margin:0 0 10px">
         Stratégie : pour chaque match à domicile, pari sur le marché (1 sec / V+O2.5 / AH-1) au meilleur ROI historique du bucket de cote, mise plate 1 €. Tri du plus récent au plus ancien.
       </p>
