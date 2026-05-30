@@ -411,6 +411,14 @@
   .watch-star:hover { opacity: 1; color: var(--gold); transform: scale(1.15); }
   .watch-star.active { color: var(--gold); opacity: 1; }
   .watch-star.active:hover { color: var(--accent); }
+  .watch-star-2 {
+    background: transparent; border: none; cursor: pointer; font-size: 16px;
+    line-height: 1; padding: 4px 6px; color: var(--muted); opacity: 0.45;
+    transition: opacity 0.15s, color 0.15s, transform 0.1s; font-family: inherit;
+  }
+  .watch-star-2:hover { opacity: 1; color: var(--accent-2); transform: scale(1.15); }
+  .watch-star-2.active { color: var(--accent-2); opacity: 1; }
+  .watch-star-2.active:hover { color: var(--accent); }
 
   /* ===== Modal detail equipe ===== */
   .modal-overlay {
@@ -485,6 +493,7 @@
   <div class="controls">
     <div class="toggle-group">
       <button class="toggle-btn active" data-filter="watchlist">★ Ma watchlist</button>
+      <button class="toggle-btn" data-filter="watchlist2" style="color:var(--accent-2)">◆ Watchlist 2</button>
       <button class="toggle-btn" data-filter="elite">Élite (1 cette saison)</button>
       <button class="toggle-btn" data-filter="tier1">Top 10 (Tier 1)</button>
       <button class="toggle-btn" data-filter="all">Toutes (n≥60)</button>
@@ -517,6 +526,7 @@
   </div>
 
   <div id="watchlist-sim-container"></div>
+  <div id="watchlist2-sim-container"></div>
 
   <div id="classement-extras">
     <div class="summary" id="summary"></div>
@@ -653,6 +663,23 @@ function toggleWatchlist(key) {
   _watchlistFixturesPromise = null;
 }
 
+// ============================================================
+// Watchlist 2 (locale uniquement, pas de sync serveur)
+// ============================================================
+const WATCHLIST_2 = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem('vbp_watchlist_2') || '[]')); }
+  catch { return new Set(); }
+})();
+function saveWatchlist2() {
+  try { localStorage.setItem('vbp_watchlist_2', JSON.stringify(Array.from(WATCHLIST_2))); } catch {}
+}
+function toggleWatchlist2(key) {
+  if (WATCHLIST_2.has(key)) WATCHLIST_2.delete(key); else WATCHLIST_2.add(key);
+  saveWatchlist2();
+  WATCHLIST2_FIXTURES_LOADED = false;
+  _watchlist2FixturesPromise = null;
+}
+
 // Au demarrage : merge local + serveur (union, jamais de perte).
 // Si une cle est sur le serveur mais pas en local -> ajoutee (cas du tel avec ancien localStorage).
 // Si une cle est en local mais pas sur le serveur -> pushee (cas offline-puis-online).
@@ -693,6 +720,7 @@ function applyFilters(teams) {
     if (CURRENT_FILTER === 'elite' && !t.isElite) return false;
     if (CURRENT_FILTER === 'tier1' && !t.isTier1) return false;
     if (CURRENT_FILTER === 'watchlist' && !WATCHLIST.has(teamWatchKey(t))) return false;
+    if (CURRENT_FILTER === 'watchlist2' && !WATCHLIST_2.has(teamWatchKey(t))) return false;
     if (CURRENT_LEAGUE && t.league !== CURRENT_LEAGUE) return false;
     if (CURRENT_TIER && t.tier !== CURRENT_TIER) return false;
     if (CURRENT_SEARCH) {
@@ -925,29 +953,46 @@ function fmtRecommendedBet(t) {
 }
 
 function render() {
-  // Met a jour le badge count sur le bouton watchlist
+  // Met a jour le badge count sur les boutons watchlist
   const wlBtn = document.querySelector('.toggle-btn[data-filter="watchlist"]');
   if (wlBtn) wlBtn.textContent = `★ Ma watchlist (${WATCHLIST.size})`;
+  const wl2Btn = document.querySelector('.toggle-btn[data-filter="watchlist2"]');
+  if (wl2Btn) wl2Btn.textContent = `◆ Watchlist 2 (${WATCHLIST_2.size})`;
 
-  // Cache les blocs hors-watchlist (summary global, market sections, betlog Elite)
-  // quand on est sur le filtre watchlist
+  // Cache les blocs hors-watchlist quand on est sur un filtre watchlist
+  const isWlFilter = CURRENT_FILTER === 'watchlist' || CURRENT_FILTER === 'watchlist2';
   const extras = document.getElementById('classement-extras');
-  if (extras) extras.style.display = CURRENT_FILTER === 'watchlist' ? 'none' : '';
+  if (extras) extras.style.display = isWlFilter ? 'none' : '';
 
-  // Sur filtre watchlist : assurer le chargement des fixtures pour toute la watchlist
+  // Sur filtre watchlist : assurer le chargement des fixtures
   if (CURRENT_FILTER === 'watchlist' && WATCHLIST.size > 0 && !WATCHLIST_FIXTURES_LOADED) {
     ensureWatchlistFixturesLoaded().then(() => {
       if (CURRENT_FILTER === 'watchlist') render();
     });
   }
+  if (CURRENT_FILTER === 'watchlist2' && WATCHLIST_2.size > 0 && !WATCHLIST2_FIXTURES_LOADED) {
+    ensureWatchlist2FixturesLoaded().then(() => {
+      if (CURRENT_FILTER === 'watchlist2') render();
+    });
+  }
 
-  // Render le panel de simulation watchlist quand on est sur ce filtre
+  // Render le panel de simulation watchlist 1
   const simContainer = document.getElementById('watchlist-sim-container');
   if (simContainer) {
     if (CURRENT_FILTER === 'watchlist' && WATCHLIST.size > 0) {
       loadWatchlistSimulation();
     } else {
       simContainer.innerHTML = '';
+    }
+  }
+
+  // Render le panel de simulation watchlist 2
+  const sim2Container = document.getElementById('watchlist2-sim-container');
+  if (sim2Container) {
+    if (CURRENT_FILTER === 'watchlist2' && WATCHLIST_2.size > 0) {
+      loadWatchlist2Simulation();
+    } else {
+      sim2Container.innerHTML = '';
     }
   }
 
@@ -960,6 +1005,15 @@ function render() {
       <div class="veille-empty">
         ★ Watchlist vide. Clique sur l'étoile à gauche d'une équipe pour l'ajouter.<br>
         <span style="font-size:11px">Astuce : filtre sur Tier 1 ou Toutes pour parcourir, étoile celles qui t'intéressent, puis reviens ici.</span>
+      </div>`;
+    document.getElementById('summary').innerHTML = '';
+    return;
+  }
+  if (CURRENT_FILTER === 'watchlist2' && sorted.length === 0) {
+    document.getElementById('content').innerHTML = `
+      <div class="veille-empty">
+        ◆ Watchlist 2 vide. Clique sur le ◆ à gauche d'une équipe pour l'ajouter.<br>
+        <span style="font-size:11px">Astuce : filtre sur Tier 1 ou Toutes pour parcourir, puis reviens ici.</span>
       </div>`;
     document.getElementById('summary').innerHTML = '';
     return;
@@ -991,6 +1045,7 @@ function render() {
       <thead>
         <tr>
           <th title="Ajouter à ma watchlist">★</th>
+          <th title="Ajouter à Watchlist 2" style="color:var(--accent-2)">◆</th>
           <th>#</th>
           <th class="sortable">Équipe</th>
           <th title="Ligue">Lig.</th>
@@ -1011,9 +1066,11 @@ function render() {
         ${sorted.map((t, i) => {
           const wlKey = teamWatchKey(t);
           const inWl = WATCHLIST.has(wlKey);
+          const inWl2 = WATCHLIST_2.has(wlKey);
           return `
             <tr class="${t.isElite ? 'elite' : ''}">
-              <td><button class="watch-star ${inWl ? 'active' : ''}" data-wl="${escapeAttr(wlKey)}" title="${inWl ? 'Retirer de ma watchlist' : 'Ajouter à ma watchlist'}">${inWl ? '★' : '☆'}</button></td>
+              <td><button class="watch-star ${inWl ? 'active' : ''}" data-wl="${escapeAttr(wlKey)}" title="${inWl ? 'Retirer de la watchlist' : 'Ajouter à la watchlist'}">${inWl ? '★' : '☆'}</button></td>
+              <td><button class="watch-star-2 ${inWl2 ? 'active' : ''}" data-wl2="${escapeAttr(wlKey)}" title="${inWl2 ? 'Retirer de Watchlist 2' : 'Ajouter à Watchlist 2'}">${inWl2 ? '◆' : '◇'}</button></td>
               <td>${i+1}</td>
               <td class="team-name" title="${escapeAttr(t.team)}"><a href="#" class="team-link" data-team="${escapeAttr(t.team)}" data-league="${escapeAttr(t.league)}"><strong>${t.team}</strong></a>${t.isElite ? '<span style="color:var(--gold)" title="Élite cette saison">⚡</span>' : ''}</td>
               <td><span class="league-tag ${t.tier}">${t.league}</span></td>
@@ -1640,6 +1697,39 @@ async function ensureWatchlistFixturesLoaded() {
 }
 
 
+let WATCHLIST2_FIXTURES_LOADED = false;
+let _watchlist2FixturesPromise = null;
+
+async function ensureWatchlist2FixturesLoaded() {
+  if (WATCHLIST2_FIXTURES_LOADED) return;
+  if (_watchlist2FixturesPromise) return _watchlist2FixturesPromise;
+  if (!DATA?.teams) return;
+  const wl2Teams = DATA.teams.filter(t => WATCHLIST_2.has(teamWatchKey(t)));
+  if (!wl2Teams.length) { WATCHLIST2_FIXTURES_LOADED = true; return; }
+
+  _watchlist2FixturesPromise = (async () => {
+    try {
+      const param = wl2Teams.map(t => `${t.team}|${t.league}`).join(',');
+      const r = await fetch(`/api/upcoming-fixtures?teams=${encodeURIComponent(param)}&days=90&season=2526&includeAway=true`);
+      if (r.ok) {
+        const j = await r.json();
+        const map = new Map();
+        for (const f of j.fixtures || []) map.set(`${f.team}|${f.league}`, f);
+        for (const t of DATA.teams) {
+          if (!WATCHLIST_2.has(teamWatchKey(t))) continue;
+          const f = map.get(teamWatchKey(t));
+          if (!f) continue;
+          t.allHomeFixtures = f.allUpcoming || [];
+          t.allMatches = f.allMatches || [];
+          if (!t.hasLiveOdds && f.nextHome) t.nextHomeFixture = f.nextHome;
+        }
+      }
+    } catch { /* silent */ }
+    WATCHLIST2_FIXTURES_LOADED = true;
+  })();
+  return _watchlist2FixturesPromise;
+}
+
 document.getElementById('veille-refresh').addEventListener('click', () => loadVeille(true));
 
 function setVeilleFilter(f) {
@@ -1712,9 +1802,61 @@ async function loadWatchlistSimulation(force = false) {
   }
 }
 
-function renderWatchlistSimulation(data) {
+// ====================================================================
+// Watchlist 2 simulation
+// ====================================================================
+
+let WL2_SIM_LAST_KEY = null;
+let WL2_SIM_LOADING = false;
+let WL2_SIM_DATA = null;
+let WL2_SIM_VIEW = 'completed';
+
+function setWatchlist2SimView(view) {
+  if (!WL_SIM_VIEWS[view]) return;
+  WL2_SIM_VIEW = view;
+  if (!WL2_SIM_DATA) return;
+  const container = document.getElementById('watchlist2-sim-container');
+  if (container) container.innerHTML = renderWatchlistSimulation(WL2_SIM_DATA, 2);
+}
+
+async function loadWatchlist2Simulation(force = false) {
+  const teamsParam = Array.from(WATCHLIST_2).join(',');
+  if (!teamsParam) return;
+  if (WL2_SIM_LOADING) return;
+  if (!force && WL2_SIM_LAST_KEY === teamsParam) return;
+
+  WL2_SIM_LOADING = true;
+  const container = document.getElementById('watchlist2-sim-container');
+  container.innerHTML = `
+    <div class="wl-sim-panel">
+      <div class="loading">
+        Simulation de paris sur ta Watchlist 2…
+        <div class="loading-bar"></div>
+      </div>
+    </div>`;
+
+  try {
+    const url = `/api/watchlist-simulation?teams=${encodeURIComponent(teamsParam)}`;
+    const r = await fetch(url, { cache: force ? 'no-store' : 'default' });
+    const data = await r.json();
+    if (data.error) {
+      container.innerHTML = `<div class="wl-sim-panel"><div class="veille-empty">Erreur : ${escapeHtml(data.error)}</div></div>`;
+    } else {
+      WL2_SIM_DATA = data;
+      container.innerHTML = renderWatchlistSimulation(data, 2);
+    }
+    WL2_SIM_LAST_KEY = teamsParam;
+  } catch (e) {
+    container.innerHTML = `<div class="wl-sim-panel"><div class="veille-empty">Erreur de chargement : ${escapeHtml(e.message || e)}</div></div>`;
+  } finally {
+    WL2_SIM_LOADING = false;
+  }
+}
+
+function renderWatchlistSimulation(data, wlNum = 1) {
   const allBets = data.bets || [];
-  const view = WL_SIM_VIEWS[WL_SIM_VIEW] || WL_SIM_VIEWS.completed;
+  const currentView = wlNum === 2 ? WL2_SIM_VIEW : WL_SIM_VIEW;
+  const view = WL_SIM_VIEWS[currentView] || WL_SIM_VIEWS.completed;
   const activeSeasons = new Set(view.seasons);
   const bets = allBets.filter(b => activeSeasons.has(b.season));
 
@@ -1766,7 +1908,8 @@ function renderWatchlistSimulation(data) {
         const n = countFor(k);
         const isUpcomingEmpty = k === 'upcoming' && n === 0;
         const tip = isUpcomingEmpty ? 'Saison 26-27 demarre en aout 2026 — aucun match joue pour le moment' : '';
-        return `<button class="toggle-btn ${WL_SIM_VIEW === k ? 'active' : ''}" onclick="setWatchlistSimView('${k}')" title="${tip}">${WL_SIM_VIEWS[k].label} (${n})</button>`;
+        const setter = wlNum === 2 ? `setWatchlist2SimView('${k}')` : `setWatchlistSimView('${k}')`;
+        return `<button class="toggle-btn ${currentView === k ? 'active' : ''}" onclick="${setter}" title="${tip}">${WL_SIM_VIEWS[k].label} (${n})</button>`;
       }).join('')}
     </div>`;
 
@@ -2130,6 +2273,14 @@ document.addEventListener('click', e => {
     e.preventDefault();
     e.stopPropagation();
     toggleWatchlist(star.dataset.wl);
+    render();
+    return;
+  }
+  const star2 = e.target.closest('.watch-star-2');
+  if (star2) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleWatchlist2(star2.dataset.wl2);
     render();
     return;
   }
