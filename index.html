@@ -586,6 +586,7 @@
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div class="toggle-group" style="margin-bottom:0">
           <button class="toggle-btn active" id="veille-filter-wl" style="font-size: 11px;" data-veille-filter="watchlist">★ Ma watchlist</button>
+          <button class="toggle-btn" id="veille-filter-wl2" style="font-size: 11px;" data-veille-filter="watchlist2">◆ Watchlist 2</button>
           <button class="toggle-btn" id="veille-filter-all" style="font-size: 11px;" data-veille-filter="all">Tout (rotation + watchlist)</button>
         </div>
         <button class="toggle-btn" id="veille-refresh" style="font-size: 11px;">🔄 Recharger</button>
@@ -1528,11 +1529,22 @@ const VEILLE_NAME_OVERRIDES = {
   'Man City':      'Manchester City',
   'Sociedad':      'Real Sociedad',
 };
-let VEILLE_FILTER = 'watchlist'; // 'watchlist' (defaut) ou 'all'
+let VEILLE_FILTER = 'watchlist'; // 'watchlist' | 'watchlist2' | 'all'
 
 function watchlistVeilleSlugs() {
   const out = new Set();
   for (const k of WATCHLIST) {
+    const teamName = k.split('|')[0];
+    out.add(veilleSlug(teamName));
+    const ov = VEILLE_NAME_OVERRIDES[teamName];
+    if (ov) out.add(veilleSlug(ov));
+  }
+  return out;
+}
+
+function watchlist2VeilleSlugs() {
+  const out = new Set();
+  for (const k of WATCHLIST_2) {
     const teamName = k.split('|')[0];
     out.add(veilleSlug(teamName));
     const ov = VEILLE_NAME_OVERRIDES[teamName];
@@ -1565,10 +1577,13 @@ function renderVeille() {
   const teamsObj = VEILLE_DATA.teams || {};
   let teamKeys = Object.keys(teamsObj);
 
-  // Filtre watchlist (defaut) : ne garde que les equipes etoilees localement
+  // Filtre par liste selectionnee
   if (VEILLE_FILTER === 'watchlist') {
     const wlSlugs = watchlistVeilleSlugs();
     teamKeys = teamKeys.filter(k => wlSlugs.has(k));
+  } else if (VEILLE_FILTER === 'watchlist2') {
+    const wl2Slugs = watchlist2VeilleSlugs();
+    teamKeys = teamKeys.filter(k => wl2Slugs.has(k));
   }
 
   if (teamKeys.length === 0) {
@@ -1578,6 +1593,8 @@ function renderVeille() {
         Aucune équipe de ta watchlist n'a encore de veille générée.
         ${totalInStore > 0 ? `<br><br><span style="font-size:12px">Le store contient ${totalInStore} équipe${totalInStore > 1 ? 's' : ''} (rotation top 4) mais aucune ne figure dans ta watchlist. Le cron quotidien (21h UTC) ajoutera tes équipes ★ à la prochaine génération. Tu peux aussi <button class="toggle-btn" onclick="setVeilleFilter('all')" style="font-size:11px;display:inline-block">Voir tout</button>.</span>` : ''}
       </div>`;
+    } else if (VEILLE_FILTER === 'watchlist2') {
+      container.innerHTML = `<div class="veille-empty">Aucune équipe de ta Watchlist 2 n'a encore de veille générée.<br><br><span style="font-size:12px">Le cron quotidien (21h UTC) ajoutera tes équipes ◆ à la prochaine génération.</span></div>`;
     } else {
       container.innerHTML = '<div class="veille-empty">Aucune équipe dans le store. Le cron n\'a pas encore tourné ou a planté.</div>';
     }
@@ -1733,7 +1750,7 @@ async function ensureWatchlist2FixturesLoaded() {
 document.getElementById('veille-refresh').addEventListener('click', () => loadVeille(true));
 
 function setVeilleFilter(f) {
-  VEILLE_FILTER = (f === 'all') ? 'all' : 'watchlist';
+  VEILLE_FILTER = (f === 'all') ? 'all' : (f === 'watchlist2') ? 'watchlist2' : 'watchlist';
   renderVeille();
 }
 document.querySelectorAll('[data-veille-filter]').forEach(btn => {
