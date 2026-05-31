@@ -11,7 +11,7 @@
 // Query : ?teams=Team1|F1,Team2|SP1,...
 // Sortie : { summary, bets[] } avec running totals chronologiques
 
-const LEAGUES_AVAILABLE = ["F1","F2","E0","E1","D1","D2","SP1","SP2","I1","I2","P1","N1","SC0","SC1","B1"];
+const LEAGUES_AVAILABLE = ["F1","F2","E0","E1","D1","D2","SP1","SP2","I1","I2","P1","N1","SC0","SC1","B1","G1"];
 const SEASONS_TRACK = ["2324","2425","2526","2627"];
 const RECOMMENDED_MARKETS = ["win","win_over25","ah_minus1"];
 const BUCKET_LABEL = { TF: "TF", FN: "FN", PE: "PE", OU: "OU" };

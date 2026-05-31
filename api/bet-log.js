@@ -21,6 +21,7 @@ const LEAGUES = [
   { code: "SC0", name: "Premiership ECO" },
   { code: "SC1", name: "Championship ECO" },
   { code: "B1",  name: "Pro League BEL" },
+  { code: "G1",  name: "Super League GRE" },
 ];
 
 const SEASON_LABELS = {
