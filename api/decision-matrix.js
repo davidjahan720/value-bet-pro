@@ -134,20 +134,25 @@ export function normalizeHeadline(s) {
 }
 
 // Dedup robuste : un event est considere doublon s'il partage soit l'URL,
-// soit le titre normalise (>= 10 chars) avec un event deja vu.
+// soit le titre normalise exact, soit les 80 premiers caracteres du titre normalise
+// (pour absorber les suffixes " - NomSource" ajoutes par les agregateurs).
 // L'ordre est preserve (premier event = source de verite).
 export function dedupEvents(events) {
-  const seenUrl = new Set();
-  const seenHl  = new Set();
+  const seenUrl      = new Set();
+  const seenHl       = new Set();
+  const seenHlPrefix = new Set(); // premiers 80 chars pour les titres avec suffixe source
   const out = [];
   for (const ev of events || []) {
-    const urlKey = (ev.url && ev.url.length > 5) ? ev.url : null;
-    const hl     = normalizeHeadline(ev.headline);
-    const hKey   = hl.length >= 10 ? hl : null;
-    if (urlKey && seenUrl.has(urlKey)) continue;
-    if (hKey   && seenHl.has(hKey))    continue;
-    if (urlKey) seenUrl.add(urlKey);
-    if (hKey)   seenHl.add(hKey);
+    const urlKey  = (ev.url && ev.url.length > 5) ? ev.url : null;
+    const hl      = normalizeHeadline(ev.headline);
+    const hKey    = hl.length >= 10 ? hl : null;
+    const hPrefix = hl.length >= 60 ? hl.slice(0, 80) : null;
+    if (urlKey  && seenUrl.has(urlKey))       continue;
+    if (hKey    && seenHl.has(hKey))          continue;
+    if (hPrefix && seenHlPrefix.has(hPrefix)) continue;
+    if (urlKey)  seenUrl.add(urlKey);
+    if (hKey)    seenHl.add(hKey);
+    if (hPrefix) seenHlPrefix.add(hPrefix);
     out.push(ev);
   }
   return out;
